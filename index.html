@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>迷信の誕生シミュレーション（スキナーのハト実験のAI版）</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1e222e;
+    --border: #2a2f3d;
+    --text: #e6e8ee;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+    --ok: #59d499;
+    --warn: #e0b84c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    line-height: 1.6;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 24px 0 8px; color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  code {
+    background: var(--panel-2);
+    padding: 1px 5px;
+    border-radius: 5px;
+    font-size: 0.85em;
+  }
+  .todo { color: var(--muted); font-style: italic; }
+  .audit { color: var(--ok); }
+</style>
+</head>
+<body>
+  <h1>迷信の誕生シミュレーション</h1>
+  <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
+
+  <div class="panel">
+    <span class="badge">PR① 足場</span>
+    <p style="margin:10px 0 0">
+      現在は土台（乱数生成・報酬環境・構造監査）のみ実装済みです。
+      エージェント／統計／描画／ペルソナは後続PRで追加します。
+      詳細は <code>README.md</code> を参照してください。
+    </p>
+  </div>
+
+  <!-- 後続PRで各パネルを実装する。ここは配置のプレースホルダ。 -->
+  <div class="panel" id="population-panel">
+    <h2 style="margin-top:0">母集団パネル（A10体・B10体）</h2>
+    <p class="todo">PR④以降で実装予定。</p>
+  </div>
+  <div class="panel" id="stats-panel">
+    <h2 style="margin-top:0">統計パネル</h2>
+    <p class="todo">PR③以降で実装予定。</p>
+  </div>
+
+<script>
+"use strict";
+(function () {
+  // ===================================================================
+  // 迷信の誕生シミュレーション — 単一ファイル実装
+  //   ・外部依存なし / ビルド不要 / file:// 直開き対応（module不使用）
+  //   ・全ロジックはこの1つのIIFE内に閉じ込める
+  // ===================================================================
+
+  // ===== SECTION: PRNG（乱数生成・シード導出） ========================
+  // Math.random() はシード指定できないため、再現性のある PRNG を用いる。
+
+  /**
+   * mulberry32: 32bitシードから [0,1) の乱数列を返すシード可能PRNG。
+   * @param {number} seed 符号なし32bit整数として解釈される。
+   * @returns {() => number} next()
+   */
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function next() {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /**
+   * xmur3: 文字列から32bit整数を生成するハッシュ関数（シード導出用）。
+   * mulberry32 は隣接シードが相関しやすいため、シードは必ずこのハッシュを
+   * 通して decorrelate する（base+index の単純な算術導出は使わない）。
+   * @param {string} str
+   * @returns {() => number} 呼ぶたびに次の32bitハッシュを返す
+   */
+  function xmur3(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return function () {
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return h >>> 0;
+    };
+  }
+
+  /**
+   * deriveSeed: ベースシード・ラベル・インデックスから独立なシードを導出。
+   * 例: 報酬ストリームは personaIndex のみ、行動ストリームは (personaIndex, kind)
+   *     でキーし、xmur3 でハッシュして無相関にする。
+   * @param {number|string} base
+   * @param {string} label 例 "reward" / "action"
+   * @param {number|string} index
+   * @returns {number} 32bit seed
+   */
+  function deriveSeed(base, label, index) {
+    return xmur3(base + ":" + label + ":" + index)();
+  }
+
+  // ===== SECTION: Environment（報酬環境・構造監査の対象） =============
+  //
+  // ★恣意性排除の第一の担保（構造監査）★
+  //   createRewardStream の引数は (p, seed) のみ。行動・エージェントを表す
+  //   変数はこの関数のスコープに一切存在しない。ゆえに報酬は「行動を読む」
+  //   ことが構造的に不可能である。
+  //
+  /**
+   * createRewardStream: 各ステップ独立に Bernoulli(p) の報酬を返すストリーム。
+   * 行動とは完全に無関係（引数・クロージャに行動変数が存在しない）。
+   * @param {number} p 報酬確率 [0,1]
+   * @param {number} seed
+   * @returns {{ next: () => 0|1 }}
+   */
+  function createRewardStream(p, seed) {
+    const rng = mulberry32(seed);
+    return {
+      next: function () {
+        return rng() < p ? 1 : 0;
+      },
+    };
+  }
+
+  // ===== SECTION: Agents（PR②で実装） ================================
+  // 対称更新A / 非対称更新B（確証バイアス）/ epsilon-greedy 共通選択 …
+
+  // ===== SECTION: Simulation engine（PR②で実装） ====================
+  // stepSimulation は必ず「r を先に確定 → 行動 a を選ぶ → 更新」の順で実行する。
+  // （構造監査の第二点：時間順序でも報酬は行動に先行する）
+
+  // ===== SECTION: Statistics（PR③で実装） ===========================
+  // erf / logGamma / 不完全ガンマ / カイ二乗 / p値較正 / 信念集中度 …
+
+  // ===== SECTION: Rendering（PR④で実装） ============================
+  // Canvas 自作チャート（母集団パネル・平均±帯・ヒストグラム）…
+
+  // ===== SECTION: Personas（PR⑥で実装） =============================
+
+  // ===== SECTION: UI wiring / bootstrap =============================
+
+  /**
+   * PR①スモークテスト: 報酬ストリームの実測報酬率が p に近いこと、
+   * および deriveSeed が異なるキーで異なるシードを返すことを確認する。
+   * （ブラウザのコンソールに出力。後続PRで正式な検証に置き換える）
+   */
+  function smokeTest() {
+    const p = 0.3;
+    const seed = deriveSeed(12345, "reward", 0);
+    const stream = createRewardStream(p, seed);
+    let sum = 0;
+    const n = 100000;
+    for (let i = 0; i < n; i++) sum += stream.next();
+    const rate = sum / n;
+
+    const sReward = deriveSeed(12345, "reward", 0);
+    const sActionA = deriveSeed(12345, "action:A", 0);
+    const sActionB = deriveSeed(12345, "action:B", 0);
+
+    console.log("[smoke] 報酬率 実測=%s / 目標=%s (n=%d)", rate.toFixed(4), p, n);
+    console.log(
+      "[smoke] deriveSeed 独立性: reward=%d action:A=%d action:B=%d (すべて相異なるべき)",
+      sReward, sActionA, sActionB
+    );
+  }
+
+  function init() {
+    smokeTest();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+  // テスト・後続PRからの参照用に最小限を公開（本番UIには不要）。
+  window.__superstitionSim = {
+    mulberry32: mulberry32,
+    xmur3: xmur3,
+    deriveSeed: deriveSeed,
+    createRewardStream: createRewardStream,
+  };
+})();
+</script>
+</body>
+</html>
