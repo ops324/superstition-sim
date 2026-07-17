@@ -62,10 +62,10 @@
   <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
 
   <div class="panel">
-    <span class="badge">PR② エージェント＋エンジン</span>
+    <span class="badge">PR③ 統計エンジン</span>
     <p style="margin:10px 0 0">
-      乱数生成・報酬環境・構造監査に加え、エージェント（対称A／確証バイアスB）と
-      シミュレーションエンジン・信念集中度を実装しました。統計検定・描画UIは後続PRで追加します。
+      乱数生成・エージェント・シミュレーションエンジンに加え、統計エンジン（不完全ガンマ関数・
+      カイ二乗検定・p値較正・一様性検定）を実装しました。描画UIは後続PRで追加します。
       現時点の動作はブラウザのコンソール（スモークテスト出力）で確認できます。
       詳細は <code>README.md</code> を参照してください。
     </p>
@@ -78,7 +78,7 @@
   </div>
   <div class="panel" id="stats-panel">
     <h2 style="margin-top:0">統計パネル</h2>
-    <p class="todo">PR③以降で実装予定。</p>
+    <p class="todo">PR④以降で実装予定。</p>
   </div>
 
 <script>
@@ -355,9 +355,8 @@
   }
 
   // ===== SECTION: Statistics ========================================
-  // 迷信の強さの指標＝「信念の集中度」。行動選択エントロピーではなく内部信念Vで
-  // 測ることで、選択規則（両者epsilon-greedy）による交絡を避ける。
-  // 統計検定（不完全ガンマ／カイ二乗／p値較正／一様性）は PR③ で追加する。
+  // 迷信の強さ＝「信念の集中度」（PR②）。数値解析基盤（不完全ガンマ・カイ二乗・
+  // p値較正・一様性）はこのセクションに実装（PR③）。
 
   /**
    * beliefConcentrationHerfindahl: 正規化した価値ベクトルの集中度 [0,1]。
@@ -401,6 +400,197 @@
       s += beliefConcentrationHerfindahl(sims[i].agent.V);
     }
     return s / sims.length;
+  }
+
+  // --- 数値解析基盤（PR③）---
+
+  /**
+   * erf: 誤差関数。Abramowitz & Stegun 7.1.26 の多項式近似（最大誤差 ~1.5×10⁻⁷）。
+   */
+  function erf(x) {
+    var sign = x >= 0 ? 1 : -1;
+    x = Math.abs(x);
+    var t = 1 / (1 + 0.3275911 * x);
+    var poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+    return sign * (1 - poly * Math.exp(-x * x));
+  }
+
+  /** stdNormalCDF: 標準正規分布の累積分布関数。 */
+  function stdNormalCDF(x) {
+    return 0.5 * (1 + erf(x / Math.SQRT2));
+  }
+
+  /**
+   * logGamma: log(Γ(x)) の Lanczos 近似（g=7, n=9, IEEE 754 精度で ~15桁）。
+   * x < 0.5 のとき反射公式 Γ(x)Γ(1-x) = π/sin(πx) を使う。
+   */
+  function logGamma(x) {
+    if (x < 0.5) {
+      return Math.log(Math.PI / Math.sin(Math.PI * x)) - logGamma(1 - x);
+    }
+    x -= 1;
+    var c = [
+      0.99999999999980993,
+      676.5203681218851,
+      -1259.1392167224028,
+      771.32342877765313,
+      -176.61502916214059,
+      12.507343278686905,
+      -0.13857109526572012,
+      9.9843695780195716e-6,
+      1.5056327351493116e-7,
+    ];
+    var a = c[0];
+    var t = x + 7 + 0.5;
+    for (var i = 1; i < c.length; i++) a += c[i] / (x + i);
+    return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+  }
+
+  /**
+   * regularizedGammaP: 下側正則不完全ガンマ関数 P(s,x) = γ(s,x)/Γ(s)。
+   * x < s+1 の領域で収束が速い級数展開を使う。x ≥ s+1 では Q 側に委譲。
+   */
+  function regularizedGammaP(s, x) {
+    if (x < 0) return 0;
+    if (x === 0) return 0;
+    if (x >= s + 1) return 1 - regularizedGammaQ(s, x);
+    var term = 1 / s;
+    var sum = term;
+    for (var k = 1; k <= 300; k++) {
+      term *= x / (s + k);
+      sum += term;
+      if (Math.abs(term) < 1e-14 * Math.abs(sum)) break;
+    }
+    return Math.exp(-x + s * Math.log(x) - logGamma(s)) * sum;
+  }
+
+  /**
+   * regularizedGammaQ: 上側正則不完全ガンマ関数 Q(s,x) = Γ(s,x)/Γ(s) = 1 - P(s,x)。
+   * x ≥ s+1 の領域で収束が速い Lentz 連分数を使う。x < s+1 では P 側に委譲。
+   */
+  function regularizedGammaQ(s, x) {
+    if (x < 0) return 1;
+    if (x < s + 1) return 1 - regularizedGammaP(s, x);
+    var TINY = 1e-300;
+    var b = x + 1 - s;
+    var c = 1 / TINY;
+    var d = Math.abs(b) < TINY ? 1 / TINY : 1 / b;
+    var f = d;
+    for (var i = 1; i <= 300; i++) {
+      var an = -i * (i - s);
+      b += 2;
+      d = an * d + b;
+      if (Math.abs(d) < TINY) d = TINY;
+      c = b + an / c;
+      if (Math.abs(c) < TINY) c = TINY;
+      d = 1 / d;
+      var del = d * c;
+      f *= del;
+      if (Math.abs(del - 1) < 1e-13) break;
+    }
+    return Math.exp(-x + s * Math.log(x) - logGamma(s)) * f;
+  }
+
+  /**
+   * chiSquareSurvivalP: カイ二乗分布の生存関数（右裾確率、いわゆる p 値）。
+   * = Q(df/2, chi2/2) = regularizedGammaQ(df/2, chi2/2)。
+   * df < 1（全固着で活動行動が1つ等）は意味をなさないので NaN を返す。
+   */
+  function chiSquareSurvivalP(chi2, df) {
+    if (df < 1) return NaN;
+    if (chi2 <= 0) return 1;
+    return regularizedGammaQ(df / 2, chi2 / 2);
+  }
+
+  /**
+   * chiSquareIndependenceTest: 行動×報酬の分割表から独立性検定を行う。
+   * @param {Array<[number,number]>} O 観測数行列。各行 [報酬なし, 報酬あり]（活動行動のみ）。
+   * @returns {{ chi2: number, df: number, p: number }}
+   *
+   * ★注意★ 報酬は構造上行動と無関係なので、この検定は構造的に棄却されない。
+   * 多シードでの p 値較正（Uniform[0,1]を確認）が第二の担保であり、
+   * 単一の「非有意」を「独立の証明」と呼んではならない。
+   */
+  function chiSquareIndependenceTest(O) {
+    var rows = O.filter(function (row) { return row[0] + row[1] > 0; });
+    var R = rows.length;
+    if (R < 2) return { chi2: 0, df: 0, p: NaN };
+    var total = rows.reduce(function (s, row) { return s + row[0] + row[1]; }, 0);
+    if (total === 0) return { chi2: 0, df: R - 1, p: 1 };
+    var rowTotals = rows.map(function (row) { return row[0] + row[1]; });
+    var colTotals = [
+      rows.reduce(function (s, row) { return s + row[0]; }, 0),
+      rows.reduce(function (s, row) { return s + row[1]; }, 0),
+    ];
+    var chi2 = 0;
+    for (var r = 0; r < R; r++) {
+      for (var c = 0; c < 2; c++) {
+        var E = rowTotals[r] * colTotals[c] / total;
+        if (E > 0) chi2 += (rows[r][c] - E) * (rows[r][c] - E) / E;
+      }
+    }
+    var df = R - 1; // (R-1)*(2-1)
+    if (df < 1) return { chi2: chi2, df: df, p: NaN };
+    return { chi2: chi2, df: df, p: chiSquareSurvivalP(chi2, df) };
+  }
+
+  /**
+   * buildContingencyTable: エージェントの走行カウントから独立性検定用の
+   * 2列テーブル（[報酬なし, 報酬あり] 行 × 活動行動数）を構築する。
+   */
+  function buildContingencyTable(agent) {
+    var N = agent.V.length;
+    var table = [];
+    for (var a = 0; a < N; a++) {
+      if (agent.counts[a] > 0) {
+        table.push([agent.counts[a] - agent.rewardCounts[a], agent.rewardCounts[a]]);
+      }
+    }
+    return table;
+  }
+
+  /**
+   * chiSquareGoodnessOfFitUniform: 優勢行動ヒストグラムが一様分布に従うか検定。
+   * counts[i] = i番目の行動が K 回試行で優勢だった回数。
+   * @param {number[]} counts 長さ N（行動数）の整数配列
+   * @returns {{ chi2: number, df: number, p: number }}
+   */
+  function chiSquareGoodnessOfFitUniform(counts) {
+    var N = counts.length;
+    if (N < 2) return { chi2: 0, df: 0, p: NaN };
+    var total = counts.reduce(function (a, b) { return a + b; }, 0);
+    if (total === 0) return { chi2: 0, df: N - 1, p: 1 };
+    var expected = total / N;
+    var chi2 = 0;
+    for (var i = 0; i < N; i++) {
+      chi2 += (counts[i] - expected) * (counts[i] - expected) / expected;
+    }
+    var df = N - 1;
+    if (df < 1) return { chi2: chi2, df: df, p: NaN };
+    return { chi2: chi2, df: df, p: chiSquareSurvivalP(chi2, df) };
+  }
+
+  /**
+   * pValueHistogram: 多シードで独立性検定を走らせ p 値の配列を返す（較正確認用）。
+   * p 値が Uniform[0,1] に従えば検定は正しく較正されている（偽陽性率≈5%）。
+   * @param {number[]} seeds 試行ごとの乱数シード配列
+   * @param {object} config {N,p,alpha,epsilon,V0,T} — M は不要（1体ずつ走らせる）
+   * @returns {number[]} 有効な p 値の配列
+   */
+  function pValueHistogram(seeds, config) {
+    var pValues = [];
+    for (var i = 0; i < seeds.length; i++) {
+      var cfg = {
+        seed: seeds[i], N: config.N, p: config.p, V0: config.V0 !== undefined ? config.V0 : 0,
+      };
+      var traits = { alpha: config.alpha, epsilon: config.epsilon, beta: 0 };
+      var sim = createSimulation(cfg, "A", 0, traits);
+      for (var t = 0; t < config.T; t++) stepSimulation(sim);
+      var table = buildContingencyTable(sim.agent);
+      var result = chiSquareIndependenceTest(table);
+      if (typeof result.p === "number" && !isNaN(result.p)) pValues.push(result.p);
+    }
+    return pValues;
   }
 
   // ===== SECTION: Rendering（PR④で実装） ============================
@@ -469,6 +659,60 @@
       if (Math.abs(simA.agent.V[a] - simB.agent.V[a]) > 1e-12) identical = false;
     }
     console.log("[smoke] β=0 で更新則 B≡A: %s", identical ? "OK（一致）" : "NG（不一致）");
+
+    // --- PR③ 統計エンジン ---
+    // (5) logGamma の既知値: logGamma(1)=0, logGamma(0.5)=0.5*log(π)
+    const lgam1 = logGamma(1);
+    const lgamHalf = logGamma(0.5);
+    const lgamHalfExpected = 0.5 * Math.log(Math.PI);
+    console.log(
+      "[smoke] logGamma(1)=%s (期待:0.0000000000)",
+      lgam1.toFixed(10)
+    );
+    console.log(
+      "[smoke] logGamma(0.5)=%s (期待:%s)",
+      lgamHalf.toFixed(10), lgamHalfExpected.toFixed(10)
+    );
+
+    // (6) chiSquareSurvivalP の既知値: χ²(1)=3.841 → p≈0.05
+    const pChi = chiSquareSurvivalP(3.841, 1);
+    const pZero = chiSquareSurvivalP(0, 1);
+    console.log(
+      "[smoke] chiSquareSurvivalP(3.841,1)=%s (期待:~0.0500)",
+      pChi.toFixed(4)
+    );
+    console.log(
+      "[smoke] chiSquareSurvivalP(0,1)=%s (期待:1.0000)",
+      pZero.toFixed(4)
+    );
+
+    // (7) 独立性検定: T=1000 後のエージェントで p 値が有効値 ∈ [0,1]
+    const simForTest = createSimulation(
+      { seed: 99, N: 5, p: 0.3, V0: 0.0 },
+      "A", 0, { alpha: 0.1, epsilon: 0.1, beta: 0 }
+    );
+    for (let tt = 0; tt < 1000; tt++) stepSimulation(simForTest);
+    const tbl = buildContingencyTable(simForTest.agent);
+    const tRes = chiSquareIndependenceTest(tbl);
+    console.log(
+      "[smoke] 独立性検定 (T=1000): chi2=%s df=%d p=%s (p∈[0,1]を期待)",
+      tRes.chi2.toFixed(3), tRes.df,
+      (typeof tRes.p === "number" && !isNaN(tRes.p)) ? tRes.p.toFixed(4) : "NaN"
+    );
+
+    // (8) p 値ヒストグラム(20シード): 有効な p 値が得られる
+    //     報酬は構造上独立なので、多くは非有意（p≥0.05）になる
+    const testSeeds = [];
+    for (let si = 0; si < 20; si++) testSeeds.push((si + 1) * 137);
+    const pVals = pValueHistogram(
+      testSeeds,
+      { N: 5, p: 0.3, alpha: 0.1, epsilon: 0.1, V0: 0.0, T: 500 }
+    );
+    const belowFive = pVals.filter(function (v) { return v < 0.05; }).length;
+    console.log(
+      "[smoke] p値ヒストグラム(20シード): 有効=%d/20, <0.05の個数=%d (Uniform[0,1]由来なら期待値≈1)",
+      pVals.length, belowFive
+    );
   }
 
   function init() {
@@ -500,10 +744,21 @@
     stepSimulation: stepSimulation,
     createPopulation: createPopulation,
     stepPopulation: stepPopulation,
-    // 統計
+    // 統計（PR②）
     beliefConcentrationHerfindahl: beliefConcentrationHerfindahl,
     shannonEntropy: shannonEntropy,
     meanBeliefConcentration: meanBeliefConcentration,
+    // 統計エンジン（PR③）
+    erf: erf,
+    stdNormalCDF: stdNormalCDF,
+    logGamma: logGamma,
+    regularizedGammaP: regularizedGammaP,
+    regularizedGammaQ: regularizedGammaQ,
+    chiSquareSurvivalP: chiSquareSurvivalP,
+    chiSquareIndependenceTest: chiSquareIndependenceTest,
+    buildContingencyTable: buildContingencyTable,
+    chiSquareGoodnessOfFitUniform: chiSquareGoodnessOfFitUniform,
+    pValueHistogram: pValueHistogram,
   };
 })();
 </script>
