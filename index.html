@@ -62,10 +62,11 @@
   <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
 
   <div class="panel">
-    <span class="badge">PR① 足場</span>
+    <span class="badge">PR② エージェント＋エンジン</span>
     <p style="margin:10px 0 0">
-      現在は土台（乱数生成・報酬環境・構造監査）のみ実装済みです。
-      エージェント／統計／描画／ペルソナは後続PRで追加します。
+      乱数生成・報酬環境・構造監査に加え、エージェント（対称A／確証バイアスB）と
+      シミュレーションエンジン・信念集中度を実装しました。統計検定・描画UIは後続PRで追加します。
+      現時点の動作はブラウザのコンソール（スモークテスト出力）で確認できます。
       詳細は <code>README.md</code> を参照してください。
     </p>
   </div>
@@ -165,15 +166,242 @@
     };
   }
 
-  // ===== SECTION: Agents（PR②で実装） ================================
-  // 対称更新A / 非対称更新B（確証バイアス）/ epsilon-greedy 共通選択 …
+  // ===== SECTION: Agents =============================================
+  // A・Bは選択規則（epsilon-greedy）を共有し、更新則だけが異なる。
+  //   A（対称）      : V[a] += α·(r − V[a])         … 当たりも外れも等しく学ぶ
+  //   B（非対称/確証）: 当たりは α(1+β) で重く、外れは α(1−β) で軽く更新
+  // β=0 のとき αp=αn=α なので B は A と完全に一致する。
 
-  // ===== SECTION: Simulation engine（PR②で実装） ====================
+  /**
+   * createAgent: エージェントの状態を生成。
+   * V は価値推定、counts/rewardCounts は含意テーブル・統計用の走行カウント。
+   * @param {number} N 行動数
+   * @param {number} V0 初期価値（全行動同一＝対称初期化）
+   * @param {'A'|'B'} kind
+   * @param {{alpha:number, epsilon:number, beta:number}} traits 実効特性
+   */
+  function createAgent(N, V0, kind, traits) {
+    const V = new Float64Array(N);
+    for (let i = 0; i < N; i++) V[i] = V0; // 全行動を同一値で初期化（えこひいきなし）
+    return {
+      kind: kind,
+      traits: traits,
+      V: V,
+      counts: new Int32Array(N), // 各行動の選択回数
+      rewardCounts: new Int32Array(N), // 各行動を選んだうち報酬が出た回数
+    };
+  }
+
+  /**
+   * argmaxWithRandomTieBreak: 最大値のインデックスを返す。同値が複数ある場合は
+   * 与えられた rng で一様ランダムに選ぶ（reservoir sampling）。
+   * ★公平性の要★ 素朴な indexOf(max) は t=0（全価値同一）で常に行動0を選ぶため
+   * コード上の偏りになる。必ずこのランダム・タイブレークを使う。
+   * @param {Float64Array} V
+   * @param {() => number} rng
+   * @returns {number}
+   */
+  function argmaxWithRandomTieBreak(V, rng) {
+    let best = V[0];
+    let idx = 0;
+    let tieCount = 1;
+    for (let i = 1; i < V.length; i++) {
+      if (V[i] > best) {
+        best = V[i];
+        idx = i;
+        tieCount = 1;
+      } else if (V[i] === best) {
+        tieCount++;
+        if (rng() < 1 / tieCount) idx = i; // 同値群から一様抽出
+      }
+    }
+    return idx;
+  }
+
+  /**
+   * selectEpsilonGreedy: 確率 ε で一様ランダム探索、そうでなければ貪欲選択。
+   * A・B共通（選択規則を統一し、A/Bの違いを更新則だけに限定する）。
+   */
+  function selectEpsilonGreedy(agent, rng, epsilon) {
+    const N = agent.V.length;
+    if (rng() < epsilon) {
+      return Math.min(N - 1, (rng() * N) | 0); // 一様ランダム（末尾クランプ）
+    }
+    return argmaxWithRandomTieBreak(agent.V, rng);
+  }
+
+  /** A: 対称な価値更新（Rescorla-Wagner）。 */
+  function updateSymmetric(agent, a, r, alpha) {
+    agent.V[a] += alpha * (r - agent.V[a]);
+  }
+
+  /**
+   * B: 非対称な価値更新（確証バイアス）。
+   * 報酬あり（確証）は α(1+β) で重く、報酬なし（反証）は α(1−β) で軽く更新。
+   * 安定性のため確証側の実効学習率を1でクランプ（α(1+β)≤1 を保証）。
+   */
+  function updateAsymmetric(agent, a, r, alpha, beta) {
+    if (r === 1) {
+      const ap = Math.min(alpha * (1 + beta), 1);
+      agent.V[a] += ap * (1 - agent.V[a]);
+    } else {
+      const an = alpha * (1 - beta);
+      agent.V[a] += an * (0 - agent.V[a]);
+    }
+  }
+
+  /**
+   * impliedContingency: 走行カウントから各行動の随伴性を推定（表示専用）。
+   * P(r|a)=報酬率(行動a選択時), P(r|¬a)=報酬率(a以外選択時), ΔP=その差。
+   * 報酬は行動と無関係なので実測 ΔP は0近傍になるはず。Bの信念Vがこれから
+   * 乖離していること（＝迷信）を可視化するために用いる。更新則には非関与。
+   * @param {object} agent
+   * @param {number} totalSteps 全行動の選択回数合計（= t）
+   * @param {number} totalRewards 全報酬回数合計
+   */
+  function impliedContingency(agent, totalSteps, totalRewards) {
+    const N = agent.V.length;
+    const eps = 0.5; // 擬似カウント（0除算回避・平滑化）
+    const out = [];
+    for (let a = 0; a < N; a++) {
+      const n1 = agent.counts[a];
+      const w1 = agent.rewardCounts[a];
+      const n0 = totalSteps - n1;
+      const w0 = totalRewards - w1;
+      const pRA = (w1 + eps) / (n1 + 2 * eps);
+      const pRnotA = (w0 + eps) / (n0 + 2 * eps);
+      out.push({ action: a, n: n1, pRA: pRA, pRnotA: pRnotA, dP: pRA - pRnotA });
+    }
+    return out;
+  }
+
+  // ===== SECTION: Simulation engine =================================
   // stepSimulation は必ず「r を先に確定 → 行動 a を選ぶ → 更新」の順で実行する。
   // （構造監査の第二点：時間順序でも報酬は行動に先行する）
 
-  // ===== SECTION: Statistics（PR③で実装） ===========================
-  // erf / logGamma / 不完全ガンマ / カイ二乗 / p値較正 / 信念集中度 …
+  /**
+   * createSimulation: 1個体分のシミュレーション状態を構築。
+   * シードキー方針（ペア比較）:
+   *   ・報酬ストリームは personaIndex のみでキー → 同一ペルソナのA版とB版は
+   *     同じ報酬列を見る（更新則だけの差を公平に比較できる）。
+   *   ・行動ストリームは (personaIndex, kind) でキー → A/Bで別。
+   * @param {object} config {seed,N,p,V0,alpha,epsilon,beta}
+   * @param {'A'|'B'} kind
+   * @param {number} personaIndex
+   * @param {{alpha:number,epsilon:number,beta:number}} traits 実効特性
+   */
+  function createSimulation(config, kind, personaIndex, traits) {
+    const rewardSeed = deriveSeed(config.seed, "reward", personaIndex);
+    const actionSeed = deriveSeed(config.seed, "action:" + kind, personaIndex);
+    return {
+      kind: kind,
+      personaIndex: personaIndex,
+      p: config.p,
+      alpha: traits.alpha,
+      epsilon: traits.epsilon,
+      beta: traits.beta,
+      rewardStream: createRewardStream(config.p, rewardSeed),
+      actionRng: mulberry32(actionSeed),
+      agent: createAgent(config.N, config.V0, kind, traits),
+      t: 0,
+      cumReward: 0,
+    };
+  }
+
+  /**
+   * stepSimulation: 1ステップ進める。
+   * ★構造監査の第二点★ 報酬 r を行動 a より先に確定する（下記の実行順序が保証）。
+   */
+  function stepSimulation(sim) {
+    const r = sim.rewardStream.next(); // (1) 報酬を先に確定（この時点で a は未定義）
+    const a = selectEpsilonGreedy(sim.agent, sim.actionRng, sim.epsilon); // (2) 行動選択
+    if (sim.kind === "A") {
+      updateSymmetric(sim.agent, a, r, sim.alpha); // (3) 更新
+    } else {
+      updateAsymmetric(sim.agent, a, r, sim.alpha, sim.beta);
+    }
+    sim.agent.counts[a]++;
+    if (r === 1) sim.agent.rewardCounts[a]++;
+    sim.cumReward += r;
+    sim.t++;
+    return { a: a, r: r };
+  }
+
+  /**
+   * createPopulation: A・B 各 M 体の小集団を構築（PR②では均質＝全員同一特性）。
+   * ペルソナ特性は PR⑥で導入する。
+   */
+  function createPopulation(config) {
+    const M = config.M;
+    const traits = {
+      alpha: config.alpha,
+      epsilon: config.epsilon,
+      beta: config.beta,
+    };
+    const A = [];
+    const B = [];
+    for (let i = 0; i < M; i++) {
+      A.push(createSimulation(config, "A", i, traits));
+      B.push(createSimulation(config, "B", i, traits));
+    }
+    return { A: A, B: B, config: config, t: 0 };
+  }
+
+  /** stepPopulation: 集団全体を1ステップ進める。 */
+  function stepPopulation(pop) {
+    for (let i = 0; i < pop.A.length; i++) stepSimulation(pop.A[i]);
+    for (let i = 0; i < pop.B.length; i++) stepSimulation(pop.B[i]);
+    pop.t++;
+  }
+
+  // ===== SECTION: Statistics ========================================
+  // 迷信の強さの指標＝「信念の集中度」。行動選択エントロピーではなく内部信念Vで
+  // 測ることで、選択規則（両者epsilon-greedy）による交絡を避ける。
+  // 統計検定（不完全ガンマ／カイ二乗／p値較正／一様性）は PR③ で追加する。
+
+  /**
+   * beliefConcentrationHerfindahl: 正規化した価値ベクトルの集中度 [0,1]。
+   * 0 = 一様（迷信なし）, 1 = 完全に1行動へ集中（強い迷信）。
+   * 正規化 Herfindahl: (H − 1/N) / (1 − 1/N), H = Σ pᵢ².
+   * @param {Float64Array|number[]} V 非負の価値ベクトル
+   */
+  function beliefConcentrationHerfindahl(V) {
+    const N = V.length;
+    if (N <= 1) return 0;
+    let sum = 0;
+    for (let i = 0; i < N; i++) sum += V[i] > 0 ? V[i] : 0;
+    if (sum <= 0) return 0; // 全て0（初期状態など）→ 集中なし
+    let H = 0;
+    for (let i = 0; i < N; i++) {
+      const pi = (V[i] > 0 ? V[i] : 0) / sum;
+      H += pi * pi;
+    }
+    const minH = 1 / N;
+    return (H - minH) / (1 - minH);
+  }
+
+  /**
+   * shannonEntropy: 確率分布のシャノンエントロピー（nat）。
+   * @param {number[]|Float64Array} probs 合計1を想定
+   */
+  function shannonEntropy(probs) {
+    let h = 0;
+    for (let i = 0; i < probs.length; i++) {
+      const q = probs[i];
+      if (q > 0) h -= q * Math.log(q);
+    }
+    return h;
+  }
+
+  /** meanBeliefConcentration: 集団（sim配列）の平均信念集中度。 */
+  function meanBeliefConcentration(sims) {
+    if (sims.length === 0) return 0;
+    let s = 0;
+    for (let i = 0; i < sims.length; i++) {
+      s += beliefConcentrationHerfindahl(sims[i].agent.V);
+    }
+    return s / sims.length;
+  }
 
   // ===== SECTION: Rendering（PR④で実装） ============================
   // Canvas 自作チャート（母集団パネル・平均±帯・ヒストグラム）…
@@ -183,28 +411,64 @@
   // ===== SECTION: UI wiring / bootstrap =============================
 
   /**
-   * PR①スモークテスト: 報酬ストリームの実測報酬率が p に近いこと、
-   * および deriveSeed が異なるキーで異なるシードを返すことを確認する。
-   * （ブラウザのコンソールに出力。後続PRで正式な検証に置き換える）
+   * スモークテスト（コンソール出力）: PR②までの土台とエンジンを検証する。
+   *   (1) 報酬率が p に収束する
+   *   (2) deriveSeed が異なるキーで異なるシードを返す
+   *   (3) 集団を走らせ、B（確証バイアス）の平均信念集中度が A を上回る
+   *       （＝「確証バイアスが迷信を強める」中心仮説の一次確認）
+   *   (4) β=0 のとき A と B の価値が完全一致する（B≡A）
+   * ※ 正式な検証は実行フェーズ／PR⑧で行う。
    */
   function smokeTest() {
+    // (1) 報酬率
     const p = 0.3;
-    const seed = deriveSeed(12345, "reward", 0);
-    const stream = createRewardStream(p, seed);
+    const stream = createRewardStream(p, deriveSeed(12345, "reward", 0));
     let sum = 0;
     const n = 100000;
     for (let i = 0; i < n; i++) sum += stream.next();
-    const rate = sum / n;
+    console.log("[smoke] 報酬率 実測=%s / 目標=%s (n=%d)", (sum / n).toFixed(4), p, n);
 
-    const sReward = deriveSeed(12345, "reward", 0);
-    const sActionA = deriveSeed(12345, "action:A", 0);
-    const sActionB = deriveSeed(12345, "action:B", 0);
-
-    console.log("[smoke] 報酬率 実測=%s / 目標=%s (n=%d)", rate.toFixed(4), p, n);
+    // (2) シード独立性
     console.log(
-      "[smoke] deriveSeed 独立性: reward=%d action:A=%d action:B=%d (すべて相異なるべき)",
-      sReward, sActionA, sActionB
+      "[smoke] deriveSeed 独立性: reward=%d action:A=%d action:B=%d (相異なるべき)",
+      deriveSeed(12345, "reward", 0),
+      deriveSeed(12345, "action:A", 0),
+      deriveSeed(12345, "action:B", 0)
     );
+
+    // (3) 集団を走らせ A/B の平均信念集中度を比較
+    const config = {
+      N: 5, p: 0.3, alpha: 0.1, V0: 0.0, epsilon: 0.1, beta: 0.5,
+      seed: 12345, M: 10,
+    };
+    const pop = createPopulation(config);
+    const T = 3000;
+    for (let t = 0; t < T; t++) stepPopulation(pop);
+    const concA = meanBeliefConcentration(pop.A);
+    const concB = meanBeliefConcentration(pop.B);
+    console.log(
+      "[smoke] T=%d 平均信念集中度: A=%s B=%s (β=%s → B>A を期待)",
+      T, concA.toFixed(3), concB.toFixed(3), config.beta
+    );
+
+    // (4) β=0 で B≡A（同一ペルソナ・同一報酬列で価値が完全一致）
+    const cfg0 = Object.assign({}, config, { beta: 0.0 });
+    const simA = createSimulation(cfg0, "A", 0, { alpha: 0.1, epsilon: 0.1, beta: 0.0 });
+    const simB = createSimulation(cfg0, "B", 0, { alpha: 0.1, epsilon: 0.1, beta: 0.0 });
+    // 選択の乱数列は kind でキーが違うため、価値一致の検証は「同じ行動・同じ報酬」
+    // を与えて更新則の一致を見る（更新則がβ=0で一致することの確認）。
+    let identical = true;
+    const rngR = mulberry32(deriveSeed(999, "r", 0));
+    for (let i = 0; i < 500; i++) {
+      const a = i % cfg0.N;
+      const r = rngR() < cfg0.p ? 1 : 0;
+      updateSymmetric(simA.agent, a, r, 0.1);
+      updateAsymmetric(simB.agent, a, r, 0.1, 0.0);
+    }
+    for (let a = 0; a < cfg0.N; a++) {
+      if (Math.abs(simA.agent.V[a] - simB.agent.V[a]) > 1e-12) identical = false;
+    }
+    console.log("[smoke] β=0 で更新則 B≡A: %s", identical ? "OK（一致）" : "NG（不一致）");
   }
 
   function init() {
@@ -219,10 +483,27 @@
 
   // テスト・後続PRからの参照用に最小限を公開（本番UIには不要）。
   window.__superstitionSim = {
+    // PRNG / 環境
     mulberry32: mulberry32,
     xmur3: xmur3,
     deriveSeed: deriveSeed,
     createRewardStream: createRewardStream,
+    // エージェント
+    createAgent: createAgent,
+    argmaxWithRandomTieBreak: argmaxWithRandomTieBreak,
+    selectEpsilonGreedy: selectEpsilonGreedy,
+    updateSymmetric: updateSymmetric,
+    updateAsymmetric: updateAsymmetric,
+    impliedContingency: impliedContingency,
+    // エンジン
+    createSimulation: createSimulation,
+    stepSimulation: stepSimulation,
+    createPopulation: createPopulation,
+    stepPopulation: stepPopulation,
+    // 統計
+    beliefConcentrationHerfindahl: beliefConcentrationHerfindahl,
+    shannonEntropy: shannonEntropy,
+    meanBeliefConcentration: meanBeliefConcentration,
   };
 })();
 </script>
