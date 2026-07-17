@@ -55,6 +55,29 @@
   }
   .todo { color: var(--muted); font-style: italic; }
   .audit { color: var(--ok); }
+  /* PR④ コントロール・描画パネル */
+  .ctrl-panel-outer { padding: 12px 18px; }
+  .ctrl-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .ctrl-row-cold { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .ctrl-group { display: flex; align-items: center; gap: 5px; }
+  .ctrl-label { font-size: 0.80rem; color: var(--muted); white-space: nowrap; }
+  .ctrl-val { font-size: 0.80rem; color: var(--accent); min-width: 32px; text-align: right; }
+  .ctrl-range { width: 90px; accent-color: var(--accent); }
+  .ctrl-range-sm { width: 70px; }
+  .ctrl-num { width: 80px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--text); font-size: 0.82rem; }
+  .cold-hint { font-size: 0.78rem; color: var(--warn); }
+  .ctrl-btns { display: flex; gap: 8px; margin-left: auto; }
+  .sim-btn { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 0.88rem; }
+  .sim-btn:hover { background: var(--border); }
+  .sim-btn-primary { background: var(--accent); color: #0a0e1a; border-color: var(--accent); font-weight: bold; }
+  .sim-btn-primary:hover { opacity: 0.85; }
+  .step-count { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+  canvas { display: block; max-width: 100%; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .stat-card { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; }
+  .stat-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .stat-value { font-size: 1.15rem; font-weight: bold; }
+  .stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -62,23 +85,113 @@
   <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
 
   <div class="panel">
-    <span class="badge">PR③ 統計エンジン</span>
+    <span class="badge">PR④ 描画コア＋UI</span>
     <p style="margin:10px 0 0">
-      乱数生成・エージェント・シミュレーションエンジンに加え、統計エンジン（不完全ガンマ関数・
-      カイ二乗検定・p値較正・一様性検定）を実装しました。描画UIは後続PRで追加します。
-      現時点の動作はブラウザのコンソール（スモークテスト出力）で確認できます。
-      詳細は <code>README.md</code> を参照してください。
+      母集団パネル（Canvas）・信念集中度時系列・操作系（再生/一時停止/リセット・スライダー）を実装しました。
+      多数回試行K・ペルソナは後続PRで追加します。詳細は <code>README.md</code> を参照してください。
     </p>
   </div>
 
-  <!-- 後続PRで各パネルを実装する。ここは配置のプレースホルダ。 -->
-  <div class="panel" id="population-panel">
-    <h2 style="margin-top:0">母集団パネル（A10体・B10体）</h2>
-    <p class="todo">PR④以降で実装予定。</p>
+  <!-- コントロールパネル -->
+  <div class="panel ctrl-panel-outer">
+    <div class="ctrl-row">
+      <div class="ctrl-group">
+        <span class="ctrl-label">p（報酬確率）</span>
+        <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
+        <span class="ctrl-val" id="val-p">0.30</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">α（学習率）</span>
+        <input type="range" id="ctrl-alpha" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+        <span class="ctrl-val" id="val-alpha">0.10</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">ε（探索率）</span>
+        <input type="range" id="ctrl-epsilon" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+        <span class="ctrl-val" id="val-epsilon">0.10</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">β（確証バイアス, B）</span>
+        <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
+        <span class="ctrl-val" id="val-beta">0.50</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">速度</span>
+        <input type="range" id="ctrl-speed" class="ctrl-range" min="1" max="50" step="1" value="5">
+        <span class="ctrl-val" id="val-speed">5</span>
+        <span class="ctrl-label">step/f</span>
+      </div>
+      <div class="ctrl-btns">
+        <button class="sim-btn sim-btn-primary" id="btn-play">▶ 再生</button>
+        <button class="sim-btn" id="btn-reset">↺ リセット</button>
+      </div>
+    </div>
+    <div class="ctrl-row ctrl-row-cold">
+      <span class="cold-hint">＊ リセット後に有効</span>
+      <div class="ctrl-group">
+        <span class="ctrl-label">V0 ＊</span>
+        <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
+        <span class="ctrl-val" id="val-V0">0.0</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">N（行動数）＊</span>
+        <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
+        <span class="ctrl-val" id="val-N">5</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">seed ＊</span>
+        <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
+      </div>
+      <span class="step-count">t = <span id="step-count">0</span></span>
+    </div>
   </div>
+
+  <!-- 母集団パネル -->
+  <div class="panel" id="population-panel">
+    <h2 style="margin-top:0">母集団パネル — A（行動主義）/ B（確証バイアス β=<span id="lbl-beta">0.50</span>）</h2>
+    <canvas id="population-canvas" width="1000" height="160"></canvas>
+    <p style="margin:6px 0 0;font-size:0.78rem;color:var(--muted)">
+      タイルの色 = 最高価値行動　明るさ = 信念集中度（明るいほど迷信が強い）　下段ミニバー = 全行動の価値（最大値で正規化）
+    </p>
+  </div>
+
+  <!-- 信念集中度 時系列 -->
+  <div class="panel">
+    <h2 style="margin-top:0">信念集中度の推移（集団平均 ± min/max）</h2>
+    <canvas id="timeseries-canvas" width="1000" height="220"></canvas>
+  </div>
+
+  <!-- 統計パネル -->
   <div class="panel" id="stats-panel">
     <h2 style="margin-top:0">統計パネル</h2>
-    <p class="todo">PR④以降で実装予定。</p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">A 平均信念集中度</div>
+        <div class="stat-value" id="stat-concA" style="color:var(--accent)">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">B 平均信念集中度</div>
+        <div class="stat-value" id="stat-concB" style="color:var(--warn)">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">B − A（確証バイアスの効果）</div>
+        <div class="stat-value" id="stat-diff">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累積報酬率（独立性の確認）</div>
+        <div class="stat-value" id="stat-rewRate">—</div>
+        <div class="stat-sub">報酬は行動に無関係 → p に一致するはず</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">ステップ数</div>
+        <div class="stat-value" id="stat-steps">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">独立性検定 p 値（A[0]、参考）</div>
+        <div class="stat-value" id="stat-pval" style="font-size:0.85rem">—</div>
+        <div class="stat-sub">単一の非有意は「独立の証明」ではない</div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -593,8 +706,365 @@
     return pValues;
   }
 
-  // ===== SECTION: Rendering（PR④で実装） ============================
-  // Canvas 自作チャート（母集団パネル・平均±帯・ヒストグラム）…
+  // ===== SECTION: Rendering（PR④）=====================================
+  // Canvas 自作チャート（母集団パネル・信念集中度時系列）。rAF でスロットル描画。
+
+  // --- グローバル UI 状態 ---
+  var gPop     = null;   // 現在の Population
+  var gPlaying = false;  // 再生中フラグ
+  var gAnimId  = null;   // requestAnimationFrame ハンドル
+  var gHistA   = [];     // { t, mean, lo, hi }[] — A集団の信念集中度履歴
+  var gHistB   = [];     // 同 B集団
+  var HIST_MAX = 300;    // 保持する履歴点数上限
+  var gFrameN  = 0;      // rAF フレームカウンタ
+  var gRenderSkip = 2;   // N フレームに1回描画（≈30fps で 60fps rAF）
+
+  var ACT_COLORS = [
+    '#6ea8fe','#59d499','#e0b84c','#f28b82','#c58af9',
+    '#80cbc4','#ffb74d','#ce93d8','#90a4ae','#a5d6a7',
+  ];
+
+  // 線形スケール関数
+  function scaleLinear(d0, d1, r0, r1) {
+    return function (v) { return r0 + (v - d0) / (d1 - d0) * (r1 - r0); };
+  }
+
+  function dominantAction(V) {
+    var best = 0;
+    for (var i = 1; i < V.length; i++) if (V[i] > V[best]) best = i;
+    return best;
+  }
+
+  // --- 母集団パネル描画 ---
+  function drawPopulationPanel(canvas, pop) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var M = pop.A.length;
+    var tw = W / M, th = H / 2, mg = 2;
+
+    ['A', 'B'].forEach(function (kind, row) {
+      pop[kind].forEach(function (sim, col) {
+        var x = col * tw + mg, y = row * th + mg;
+        var iw = tw - mg * 2, ih = th - mg * 2;
+        var conc = beliefConcentrationHerfindahl(sim.agent.V);
+        var dom  = dominantAction(sim.agent.V);
+
+        // 背景: 暗い（迷信なし）→ 明るい（迷信強）
+        ctx.fillStyle = '#131720';
+        ctx.fillRect(x, y, iw, ih);
+        ctx.globalAlpha = 0.12 + 0.88 * conc;
+        ctx.fillStyle = ACT_COLORS[dom % ACT_COLORS.length];
+        ctx.fillRect(x, y, iw, ih);
+        ctx.globalAlpha = 1;
+
+        // 価値バー（ミニ）: 下 5px を全行動バーに使う
+        var N = sim.agent.V.length;
+        var bw = (iw - 4) / N;
+        var maxV = 0;
+        for (var ai = 0; ai < N; ai++) if (sim.agent.V[ai] > maxV) maxV = sim.agent.V[ai];
+        for (var ai = 0; ai < N; ai++) {
+          var bx = x + 2 + ai * bw;
+          var by = y + ih - 6;
+          ctx.fillStyle = '#222736';
+          ctx.fillRect(bx, by, bw - 1, 5);
+          var frac = maxV > 0 ? sim.agent.V[ai] / maxV : 0;
+          ctx.fillStyle = ACT_COLORS[ai % ACT_COLORS.length];
+          ctx.fillRect(bx, by, Math.max(0, frac * (bw - 1)), 5);
+        }
+
+        // テキスト
+        ctx.fillStyle = 'rgba(230,232,238,0.95)';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText(kind + col, x + 3, y + 14);
+        ctx.fillStyle = 'rgba(154,163,178,0.9)';
+        ctx.font = '10px monospace';
+        ctx.fillText('a' + dom, x + 3, y + 26);
+        ctx.fillText(conc.toFixed(2), x + 3, y + 38);
+      });
+    });
+
+    // 行ラベル（左端）
+    ctx.fillStyle = 'rgba(110,168,254,0.7)';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('A', 3, th - 3);
+    ctx.fillStyle = 'rgba(224,184,76,0.7)';
+    ctx.fillText('B', 3, H - 3);
+  }
+
+  // --- 履歴記録 ---
+  function recordHistory(pop) {
+    function stats(arr) {
+      var lo = arr[0], hi = arr[0], sum = 0;
+      for (var i = 0; i < arr.length; i++) {
+        sum += arr[i];
+        if (arr[i] < lo) lo = arr[i];
+        if (arr[i] > hi) hi = arr[i];
+      }
+      return { t: pop.t, mean: sum / arr.length, lo: lo, hi: hi };
+    }
+    var cA = pop.A.map(function (s) { return beliefConcentrationHerfindahl(s.agent.V); });
+    var cB = pop.B.map(function (s) { return beliefConcentrationHerfindahl(s.agent.V); });
+    gHistA.push(stats(cA));
+    gHistB.push(stats(cB));
+    if (gHistA.length > HIST_MAX) { gHistA.shift(); gHistB.shift(); }
+  }
+
+  // --- 時系列チャート描画 ---
+  function drawTimeSeriesChart(canvas) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (gHistA.length < 2) {
+      ctx.fillStyle = '#9aa3b2';
+      ctx.font = '13px sans-serif';
+      ctx.fillText('▶ 再生ボタンを押してシミュレーションを開始してください', 24, H / 2 + 5);
+      return;
+    }
+
+    var pad = { t: 16, r: 20, b: 30, l: 40 };
+    var pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+    var N = gHistA.length;
+    var scX = scaleLinear(0, N - 1, pad.l, pad.l + pw);
+    var scY = scaleLinear(0, 1, pad.t + ph, pad.t);
+
+    // グリッド
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      var gy = scY(v);
+      ctx.strokeStyle = '#2a2f3d';
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+      ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(2), pad.l - 4, gy + 3);
+    });
+    ctx.setLineDash([]);
+    ctx.textAlign = 'left';
+
+    // 系列
+    [
+      { hist: gHistA, band: 'rgba(110,168,254,0.12)', line: '#6ea8fe' },
+      { hist: gHistB, band: 'rgba(224,184,76,0.17)',  line: '#e0b84c' },
+    ].forEach(function (s) {
+      var h = s.hist;
+      if (h.length < 2) return;
+      // バンド (lo〜hi)
+      ctx.beginPath();
+      ctx.moveTo(scX(0), scY(h[0].lo));
+      for (var i = 1; i < h.length; i++) ctx.lineTo(scX(i), scY(h[i].lo));
+      for (var i = h.length - 1; i >= 0; i--) ctx.lineTo(scX(i), scY(h[i].hi));
+      ctx.closePath();
+      ctx.fillStyle = s.band; ctx.fill();
+      // 平均線
+      ctx.beginPath();
+      ctx.moveTo(scX(0), scY(h[0].mean));
+      for (var i = 1; i < h.length; i++) ctx.lineTo(scX(i), scY(h[i].mean));
+      ctx.strokeStyle = s.line; ctx.lineWidth = 2; ctx.stroke();
+    });
+
+    // 軸
+    ctx.strokeStyle = '#3a3f50'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph);
+    ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
+
+    // Y 軸タイトル
+    ctx.save();
+    ctx.translate(10, pad.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('信念集中度', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
+
+    // X 軸 t 表示
+    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
+    ctx.fillText('t=' + gHistA[gHistA.length - 1].t.toLocaleString(), pad.l + pw - 68, H - 4);
+
+    // 凡例
+    var lx = pad.l + 8, ly = pad.t + 6;
+    var lastA = gHistA[gHistA.length - 1], lastB = gHistB[gHistB.length - 1];
+    [
+      ['#6ea8fe', 'A（行動主義）', lastA ? lastA.mean : 0],
+      ['#e0b84c', 'B（確証バイアス）', lastB ? lastB.mean : 0],
+    ].forEach(function (e, i) {
+      ctx.fillStyle = e[0]; ctx.fillRect(lx, ly + i * 14, 14, 3);
+      ctx.fillStyle = '#e6e8ee'; ctx.font = '10px monospace';
+      ctx.fillText(e[1] + '  ' + e[2].toFixed(3), lx + 18, ly + i * 14 + 8);
+    });
+  }
+
+  // --- 統計パネル更新 ---
+  function updateStatsPanel() {
+    if (!gPop) return;
+    var concA = meanBeliefConcentration(gPop.A);
+    var concB = meanBeliefConcentration(gPop.B);
+    var diff  = concB - concA;
+    var totR = 0, totT = 0;
+    gPop.A.concat(gPop.B).forEach(function (s) { totR += s.cumReward; totT += s.t; });
+    var rewRate = totT > 0 ? totR / totT : 0;
+
+    var ge = function (id) { return document.getElementById(id); };
+    if (ge('stat-concA')) ge('stat-concA').textContent = concA.toFixed(3);
+    if (ge('stat-concB')) ge('stat-concB').textContent = concB.toFixed(3);
+    if (ge('stat-diff')) {
+      ge('stat-diff').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3);
+      ge('stat-diff').style.color = diff > 0.02 ? 'var(--warn)' : diff < -0.02 ? 'var(--ok)' : 'var(--muted)';
+    }
+    if (ge('stat-rewRate'))
+      ge('stat-rewRate').textContent = rewRate.toFixed(3) + ' (目標 p=' + gPop.config.p.toFixed(2) + ')';
+    if (ge('stat-steps'))  ge('stat-steps').textContent  = (gPop.t || 0).toLocaleString();
+    if (ge('step-count'))  ge('step-count').textContent  = (gPop.t || 0).toLocaleString();
+    if (ge('lbl-beta') && gPop.B.length > 0) ge('lbl-beta').textContent = gPop.B[0].beta.toFixed(2);
+
+    // 独立性検定（A[0]、参考表示）
+    if (gPop.A.length > 0) {
+      var tbl = buildContingencyTable(gPop.A[0].agent);
+      var tr  = chiSquareIndependenceTest(tbl);
+      var pEl = ge('stat-pval');
+      if (pEl) {
+        if (isNaN(tr.p)) {
+          pEl.textContent = 'N/A（データ不足）';
+          pEl.style.color = 'var(--muted)';
+        } else {
+          pEl.textContent = tr.p.toFixed(4) + (tr.p < 0.05 ? '  ⚠ 偶発的' : '  ✓ 整合的');
+          pEl.style.color = tr.p < 0.05 ? 'var(--warn)' : 'var(--ok)';
+        }
+      }
+    }
+  }
+
+  // --- 設定の読み取り ---
+  function readHotConfig() {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      p:       parseFloat(g('ctrl-p').value),
+      alpha:   parseFloat(g('ctrl-alpha').value),
+      epsilon: parseFloat(g('ctrl-epsilon').value),
+      beta:    parseFloat(g('ctrl-beta').value),
+    };
+  }
+
+  function readColdConfig() {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      N:    parseInt(g('ctrl-N').value)    || 5,
+      V0:   parseFloat(g('ctrl-V0').value),
+      seed: parseInt(g('ctrl-seed').value) || 12345,
+      M:    10,
+    };
+  }
+
+  // α, ε, β をシム全体へ即時反映
+  function applyHotParams() {
+    if (!gPop) return;
+    var hot = readHotConfig();
+    ['A', 'B'].forEach(function (kind) {
+      gPop[kind].forEach(function (sim) {
+        sim.alpha   = hot.alpha;
+        sim.epsilon = hot.epsilon;
+        if (kind === 'B') sim.beta = hot.beta;
+      });
+    });
+  }
+
+  // p を変更: 報酬ストリームのみ再構築（エージェント状態は保持）
+  function applyHotP(newP) {
+    if (!gPop) return;
+    gPop.config.p = newP;
+    ['A', 'B'].forEach(function (kind) {
+      gPop[kind].forEach(function (sim) {
+        sim.p = newP;
+        var seed = deriveSeed(gPop.config.seed, 'reward', sim.personaIndex);
+        sim.rewardStream = createRewardStream(newP, seed);
+      });
+    });
+    gHistA = []; gHistB = []; // p 変更で文脈が変わるため履歴クリア
+  }
+
+  // フルリセット
+  function resetSim() {
+    var hot  = readHotConfig();
+    var cold = readColdConfig();
+    gPop = createPopulation({
+      N: cold.N, p: hot.p, alpha: hot.alpha, epsilon: hot.epsilon,
+      beta: hot.beta, V0: cold.V0, seed: cold.seed, M: cold.M,
+    });
+    gHistA = []; gHistB = [];
+    gFrameN = 0;
+    recordHistory(gPop);
+    renderAll();
+  }
+
+  // 全キャンバスを描画
+  function renderAll() {
+    var pc = document.getElementById('population-canvas');
+    var tc = document.getElementById('timeseries-canvas');
+    if (gPop && pc) drawPopulationPanel(pc, gPop);
+    if (tc) drawTimeSeriesChart(tc);
+    updateStatsPanel();
+  }
+
+  // rAF ループ
+  function tick() {
+    if (!gPlaying) return;
+    var steps = parseInt(document.getElementById('ctrl-speed').value) || 5;
+    for (var i = 0; i < steps; i++) if (gPop) stepPopulation(gPop);
+    if (gPop) recordHistory(gPop);
+    gFrameN++;
+    if (gFrameN % gRenderSkip === 0) renderAll();
+    gAnimId = requestAnimationFrame(tick);
+  }
+
+  function setPlaying(v) {
+    gPlaying = v;
+    var btn = document.getElementById('btn-play');
+    if (btn) btn.textContent = v ? '⏸ 一時停止' : '▶ 再生';
+    if (v) {
+      gAnimId = requestAnimationFrame(tick);
+    } else {
+      if (gAnimId) { cancelAnimationFrame(gAnimId); gAnimId = null; }
+    }
+  }
+
+  // コントロールの接続
+  function wireControls() {
+    var rangeBindings = [
+      ['ctrl-p',       'val-p',       function (v) { return (+v).toFixed(2); }],
+      ['ctrl-alpha',   'val-alpha',   function (v) { return (+v).toFixed(2); }],
+      ['ctrl-epsilon', 'val-epsilon', function (v) { return (+v).toFixed(2); }],
+      ['ctrl-beta',    'val-beta',    function (v) { return (+v).toFixed(2); }],
+      ['ctrl-V0',      'val-V0',      function (v) { return (+v).toFixed(1); }],
+      ['ctrl-N',       'val-N',       function (v) { return +v; }],
+      ['ctrl-speed',   'val-speed',   function (v) { return +v; }],
+    ];
+    rangeBindings.forEach(function (b) {
+      var el = document.getElementById(b[0]);
+      var vl = document.getElementById(b[1]);
+      if (el && vl) el.addEventListener('input', function () { vl.textContent = b[2](el.value); });
+    });
+
+    // ホット: α, ε, β → 即時反映
+    ['ctrl-alpha', 'ctrl-epsilon', 'ctrl-beta'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', applyHotParams);
+    });
+
+    // ホット: p → 報酬ストリーム再構築
+    var pEl = document.getElementById('ctrl-p');
+    if (pEl) pEl.addEventListener('input', function () { applyHotP(parseFloat(pEl.value)); });
+
+    // 再生/一時停止
+    var playBtn = document.getElementById('btn-play');
+    if (playBtn) playBtn.addEventListener('click', function () { setPlaying(!gPlaying); });
+
+    // リセット
+    var resetBtn = document.getElementById('btn-reset');
+    if (resetBtn) resetBtn.addEventListener('click', function () { setPlaying(false); resetSim(); });
+  }
 
   // ===== SECTION: Personas（PR⑥で実装） =============================
 
@@ -717,6 +1187,8 @@
 
   function init() {
     smokeTest();
+    wireControls();
+    resetSim();
   }
 
   if (document.readyState === "loading") {
