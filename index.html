@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>迷信の誕生シミュレーション（スキナーのハト実験のAI版）</title>
+<meta name="description" content="報酬は完全ランダム。それでも AI は迷信を作る — スキナーのハト実験のAI版">
+
 <style>
   :root {
     --bg:      #ffffff;
@@ -126,6 +128,60 @@
   .ctrl-group-wrap { display: flex; flex-direction: column; gap: 3px; }
   .ctrl-hint-text { font-size: 0.72rem; color: var(--muted); line-height: 1.4; max-width: 200px; }
   .ctrl-hint-text em { color: var(--ok); font-style: normal; font-weight: bold; }
+
+  /* ===== プロ品質コンポーネント（設計トークン統一・AI臭排除） ===== */
+  :root {
+    --r-sm: 8px;
+    --r-md: 10px;
+    --r-pill: 9999px;
+    --shadow-xs: 0 1px 2px rgba(16,24,40,.06);
+    --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --border-strong: #d0d5dd;
+  }
+  /* 基本操作バー */
+  .ctrl-essentials { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-xs); padding: 16px; }
+  .ctrl-essentials .ctrl-group { gap: 8px; }
+  .ctrl-essentials .ctrl-label { color: var(--text); font-weight: 500; }
+  .play-hint { width: 100%; margin: -4px 0 0; font-size: 0.8rem; color: var(--muted); }
+  /* ボタン（跳ねない・発光しない） */
+  .sim-btn { padding: 9px 18px; border-radius: var(--r-pill); border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.875rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+  .sim-btn:hover { background: var(--panel-2); border-color: var(--border-strong); box-shadow: none; }
+  .sim-btn:active { background: #f2f4f7; }
+  .sim-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
+  .sim-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: var(--shadow-xs); }
+  .sim-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; opacity: 1; }
+  .sim-btn-primary:active { background: #1e40af; border-color: #1e40af; }
+  .preset-btn { padding: 8px 16px; border-radius: var(--r-pill); border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.86rem; font-weight: 500; transition: background .15s ease, border-color .15s ease; }
+  .preset-btn:hover { background: var(--panel-2); border-color: var(--border-strong); box-shadow: none; }
+  .preset-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
+  /* レンジスライダー（自前つまみ・発光なし） */
+  .ctrl-range { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; cursor: pointer; }
+  .ctrl-range::-webkit-slider-runnable-track { height: 4px; border-radius: var(--r-pill); background: var(--border); }
+  .ctrl-range::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--border-strong); box-shadow: var(--shadow-xs); transition: border-color .15s ease; }
+  .ctrl-range:hover::-webkit-slider-thumb, .ctrl-range:active::-webkit-slider-thumb { border-color: var(--accent); }
+  .ctrl-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(37,99,235,.2); outline: none; }
+  .ctrl-range::-moz-range-track { height: 4px; border-radius: var(--r-pill); background: var(--border); }
+  .ctrl-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--border-strong); box-shadow: var(--shadow-xs); }
+  .ctrl-range:hover::-moz-range-thumb, .ctrl-range:active::-moz-range-thumb { border-color: var(--accent); }
+  /* 数値入力 */
+  .ctrl-num { border-radius: var(--r-sm); border: 1px solid var(--border); padding: 6px 10px; font-variant-numeric: tabular-nums; transition: border-color .15s ease, box-shadow .15s ease; }
+  .ctrl-num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  .ctrl-val, .step-count, .stat-value { font-variant-numeric: tabular-nums; }
+  /* 詳しい設定アコーディオン */
+  details.ctrl-advanced { margin-top: 12px; }
+  details.ctrl-advanced > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 0.875rem; font-weight: 600; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); transition: background .15s ease; }
+  details.ctrl-advanced > summary::-webkit-details-marker { display: none; }
+  details.ctrl-advanced > summary::before { content: "\25B8"; color: var(--muted); font-size: 0.8rem; }
+  details.ctrl-advanced[open] > summary::before { content: "\25BE"; }
+  details.ctrl-advanced > summary:hover { background: var(--panel-2); }
+  details.ctrl-advanced[open] > summary { border-radius: var(--r-md) var(--r-md) 0 0; background: var(--panel-2); }
+  .ctrl-advanced-body { background: #fff; border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--r-md) var(--r-md); padding: 16px; }
+  .ctrl-advanced-body .ctrl-cats { margin: 0; }
+  /* p値メーターの針: 色付きグロー撤去・中立影 */
+  .pmeter-marker { box-shadow: var(--shadow-xs); }
+  @media (prefers-reduced-motion: reduce) {
+    .sim-btn, .preset-btn, .ctrl-num, .ctrl-range::-webkit-slider-thumb { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -162,79 +218,85 @@
 
   <!-- コントロールパネル -->
   <div class="panel ctrl-panel-outer">
-    <div class="ctrl-cats">
-      <!-- 世界のルール（環境） -->
-      <div class="ctrl-cat ctrl-cat-world">
-        <div class="ctrl-cat-title">🌍 世界のルール（エサと選択肢）</div>
-        <div class="ctrl-cat-body">
-          <div class="ctrl-group" title="各ステップでエサ（報酬）が出る確率。AIの行動とは無関係です">
-            <span class="ctrl-label">🎲 エサの確率 p</span>
-            <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
-            <span class="ctrl-val" id="val-p">0.30</span>
-          </div>
-          <div class="ctrl-group-wrap">
-            <div class="ctrl-group" title="AIが試すおまじない（行動）の種類数">
-              <span class="ctrl-label">おまじないの数 N＊</span>
-              <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
-              <span class="ctrl-val" id="val-N">5</span>
-            </div>
-            <div class="ctrl-hint-text">種類が少ないほど迷信が<em>1つに集中</em>しやすい</div>
-          </div>
-          <div class="ctrl-group-wrap">
-            <div class="ctrl-group" title="乱数の種。同じ数字なら毎回同じ展開を再現できます">
-              <span class="ctrl-label">展開パターン＊</span>
-              <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
-            </div>
-            <div class="ctrl-hint-text">数字を変えると<em>別のストーリー</em>に。同じ数字なら毎回同じ展開</div>
-          </div>
-        </div>
+    <!-- 基本操作（常時表示） -->
+    <div class="ctrl-essentials">
+      <button class="sim-btn sim-btn-primary" id="btn-play">▶ 再生</button>
+      <button class="sim-btn" id="btn-reset">↺ リセット</button>
+      <div class="ctrl-group" title="各ステップでエサ（報酬）が出る確率。AIの行動とは無関係です">
+        <span class="ctrl-label">🎲 エサの確率 p</span>
+        <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
+        <span class="ctrl-val" id="val-p">0.30</span>
       </div>
-      <!-- AIの性格（学び方） -->
-      <div class="ctrl-cat ctrl-cat-ai">
-        <div class="ctrl-cat-title">🧠 AI の性格（学び方のクセ）</div>
-        <div class="ctrl-cat-body">
-          <div class="ctrl-group" title="1回の結果をどれだけ強く覚えるか（学習率 α）">
-            <span class="ctrl-label">学習の速さ α</span>
-            <input type="range" id="ctrl-alpha" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
-            <span class="ctrl-val" id="val-alpha">0.10</span>
-          </div>
-          <div class="ctrl-group" title="たまに別の行動を試してみる確率（探索率 ε）">
-            <span class="ctrl-label">気まぐれ度 ε</span>
-            <input type="range" id="ctrl-epsilon" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
-            <span class="ctrl-val" id="val-epsilon">0.10</span>
-          </div>
-          <div class="ctrl-group" title="B班のみ: 当たりを強く・外れを弱く覚える度合い（確証バイアス β）。0 にすると A班と完全に同じになります">
-            <span class="ctrl-label" style="color:var(--warn)">思い込み β（B班だけ）</span>
-            <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
-            <span class="ctrl-val" id="val-beta">0.50</span>
-          </div>
-          <div class="ctrl-group-wrap">
-            <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
-              <span class="ctrl-label">最初の期待 V0＊</span>
-              <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
-              <span class="ctrl-val" id="val-V0">0.0</span>
-            </div>
-            <div class="ctrl-hint-text">p より<em>高くすると迷信が消えやすい</em>（🧊 プリセットで確認）</div>
-          </div>
-        </div>
+      <div class="ctrl-group" title="B班のみ: 当たりを強く・外れを弱く覚える度合い（確証バイアス β）。0 にすると A班と完全に同じになります">
+        <span class="ctrl-label" style="color:var(--warn)">思い込み β（B班だけ）</span>
+        <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
+        <span class="ctrl-val" id="val-beta">0.50</span>
       </div>
-      <!-- 再生コントロール -->
-      <div class="ctrl-cat ctrl-cat-play">
-        <div class="ctrl-cat-title">▶ 再生コントロール</div>
-        <div class="ctrl-cat-body">
-          <button class="sim-btn sim-btn-primary" id="btn-play">▶ 再生</button>
-          <button class="sim-btn" id="btn-reset">↺ リセット</button>
-          <div class="ctrl-group" title="1秒あたりの実行ステップ数。ゆっくり観察するなら小さく、結末を急ぐなら大きく">
-            <span class="ctrl-label">速度</span>
-            <input type="range" id="ctrl-speed" class="ctrl-range ctrl-range-sm" min="5" max="600" step="5" value="30">
-            <span class="ctrl-val" id="val-speed">30</span>
-            <span class="ctrl-label">歩/秒</span>
-          </div>
-          <span class="step-count">経過 t = <span id="step-count">0</span></span>
-        </div>
+      <div class="ctrl-group" title="1秒あたりの実行ステップ数。小さいほどゆっくり観察できます">
+        <span class="ctrl-label">速度</span>
+        <input type="range" id="ctrl-speed" class="ctrl-range" min="1" max="300" step="1" value="20">
+        <span class="ctrl-val" id="val-speed">20</span>
+        <span class="ctrl-label">歩/秒</span>
       </div>
+      <span class="step-count">経過 t = <span id="step-count">0</span></span>
+      <p class="play-hint" id="play-hint">▶ 再生 を押すと動き出します。</p>
     </div>
-    <span class="ctrl-cat-hint">＊（おまじないの数・展開パターン・最初の期待）の変更は ↺リセット後に反映されます</span>
+
+    <!-- 詳しい設定（折りたたみ） -->
+    <details class="ctrl-advanced">
+      <summary>⚙️ 詳しい設定（上級者向け）</summary>
+      <div class="ctrl-advanced-body">
+        <div class="ctrl-cats">
+          <!-- 世界のルール（環境） -->
+          <div class="ctrl-cat ctrl-cat-world">
+            <div class="ctrl-cat-title">🌍 世界のルール（選択肢と展開）</div>
+            <div class="ctrl-cat-body">
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="AIが試すおまじない（行動）の種類数">
+                  <span class="ctrl-label">おまじないの数 N＊</span>
+                  <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
+                  <span class="ctrl-val" id="val-N">5</span>
+                </div>
+                <div class="ctrl-hint-text">種類が少ないほど迷信が<em>1つに集中</em>しやすい</div>
+              </div>
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="乱数の種。同じ番号なら毎回同じ展開を再現できます">
+                  <span class="ctrl-label">展開番号（同じ番号＝同じ展開）＊</span>
+                  <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
+                </div>
+                <button class="sim-btn" id="btn-newseed">🎲 別の展開で見る</button>
+                <div class="ctrl-hint-text">ボタンを押すと<em>違う偶然の展開</em>に。番号を固定すれば同じ展開を再現</div>
+              </div>
+            </div>
+          </div>
+          <!-- AIの性格（学び方） -->
+          <div class="ctrl-cat ctrl-cat-ai">
+            <div class="ctrl-cat-title">🧠 AI の性格（学び方のクセ）</div>
+            <div class="ctrl-cat-body">
+              <div class="ctrl-group" title="1回の結果をどれだけ強く覚えるか（学習率 α）">
+                <span class="ctrl-label">学習の速さ α</span>
+                <input type="range" id="ctrl-alpha" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+                <span class="ctrl-val" id="val-alpha">0.10</span>
+              </div>
+              <div class="ctrl-group" title="たまに別の行動を試してみる確率（探索率 ε）">
+                <span class="ctrl-label">気まぐれ度 ε</span>
+                <input type="range" id="ctrl-epsilon" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+                <span class="ctrl-val" id="val-epsilon">0.10</span>
+              </div>
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
+                  <span class="ctrl-label">スタート時の期待（楽観度）＊</span>
+                  <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
+                  <span class="ctrl-val" id="val-V0">0.0</span>
+                </div>
+                <div class="ctrl-hint-text">0＝どれも効かないと疑ってスタート。<em>高いほど楽観的で迷信が生まれにくい</em>（🧊プリセットで確認）</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="ctrl-cat-hint">＊（おまじないの数・展開番号・スタート時の期待）の変更は ↺リセット後に反映されます</span>
+      </div>
+    </details>
   </div>
 
   <!-- ライブ解説 -->
@@ -305,7 +367,7 @@
           </div>
         </div>
         <div class="stat-value" id="stat-pval" style="font-size:0.92rem">—</div>
-        <div class="stat-sub">エサが行動と無関係なら、白い針は広い緑ゾーンをさまよいます。ごくまれ（約20回に1回）に赤へ触れるのは正常。単発の結果は「証明」ではなく整合性の確認です。</div>
+        <div class="stat-sub">エサが行動と無関係なら、青い針は広い緑ゾーンをさまよいます。ごくまれ（約20回に1回）に赤へ触れるのは正常。単発の結果は「証明」ではなく整合性の確認です。</div>
       </div>
     </div>
   </div>
@@ -1080,7 +1142,7 @@
     if (gHistA.length < 2) {
       ctx.fillStyle = C.emptyText;
       ctx.font = '13px sans-serif';
-      ctx.fillText('まもなくグラフが伸びていきます…（動かない場合は ▶ 再生 を押してください）', 24, H / 2 + 5);
+      ctx.fillText('▶ 再生 を押すとグラフが伸びていきます', 24, H / 2 + 5);
       return;
     }
 
@@ -1232,7 +1294,7 @@
     var msg;
 
     if (t === 0) {
-      msg = 'エサは確率 ' + pPct + '% の完全ランダム。AI が何をしてもこの確率は変わりません。それでも「効く行動がある」と信じ込むでしょうか？ まもなく自動でスタートします。';
+      msg = 'エサは確率 ' + pPct + '% の完全ランダム。AI が何をしてもこの確率は変わりません。それでも「効く行動がある」と信じ込むでしょうか？ ▶ 再生 ボタンを押して観察を始めましょう。';
     } else if (beta === 0) {
       msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（過信度の差はほぼ 0）。両班とも"お気に入り"を真の ' + pPct + '% 前後で正しく評価 ＝ 迷信は生まれません。β を上げると B班だけが過信し始めます。';
     } else {
@@ -1347,6 +1409,8 @@
     gPlaying = v;
     var btn = document.getElementById('btn-play');
     if (btn) btn.textContent = v ? '⏸ 一時停止' : '▶ 再生';
+    var ph = document.getElementById('play-hint');
+    if (ph) ph.style.display = v ? 'none' : '';
     if (v) {
       gLastTick = 0; gStepCarry = 0; // 一時停止中の経過時間を持ち越さない
       gAnimId = requestAnimationFrame(tick);
@@ -1389,6 +1453,16 @@
     // リセット
     var resetBtn = document.getElementById('btn-reset');
     if (resetBtn) resetBtn.addEventListener('click', function () { setPlaying(false); resetSim(); });
+
+    // 🎲 別の展開（新しい展開番号でリセットし、そのまま再生開始）
+    var newSeedBtn = document.getElementById('btn-newseed');
+    if (newSeedBtn) newSeedBtn.addEventListener('click', function () {
+      var seedEl = document.getElementById('ctrl-seed');
+      if (seedEl) seedEl.value = Math.floor(Math.random() * 100000);
+      setPlaying(false);
+      resetSim();
+      setPlaying(true);
+    });
 
     // プリセット（見どころワンクリック）
     var presetBtns = document.querySelectorAll('.preset-btn');
@@ -1563,8 +1637,7 @@
     smokeTest();
     wireControls();
     resetSim();
-    // 初見者向け: 開いた瞬間から動き出す（▶ を探させない）
-    setPlaying(true);
+    // 初見者向け: 自動再生はせず ▶ 再生 を押してから開始（手動スタート）
   }
 
   if (document.readyState === "loading") {
