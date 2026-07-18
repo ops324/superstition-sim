@@ -78,48 +78,76 @@
   .stat-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
   .stat-value { font-size: 1.15rem; font-weight: bold; }
   .stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+  /* 初見者向けUI */
+  .intro-panel { border-left: 4px solid var(--accent); }
+  .intro-title { margin: 0; font-size: 0.95rem; color: var(--accent); font-weight: bold; }
+  .story-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+  .story-card { background: var(--panel-2); border-radius: 10px; padding: 12px 14px; font-size: 0.87rem; line-height: 1.55; }
+  .story-num { display: inline-block; background: var(--accent); color: #0a0e1a; font-weight: bold; border-radius: 999px; width: 22px; height: 22px; text-align: center; line-height: 22px; margin-right: 6px; font-size: 0.8rem; }
+  .narration { border: 1px solid var(--border); border-left: 4px solid var(--warn); background: var(--panel); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.93rem; }
+  .nar-label { color: var(--warn); font-weight: bold; margin-right: 8px; font-size: 0.8rem; white-space: nowrap; }
+  .panel-sub { margin: 2px 0 10px; font-size: 0.8rem; color: var(--muted); line-height: 1.65; }
+  .legend-chips { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; font-size: 0.78rem; color: var(--muted); align-items: center; }
+  .chip-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  details.explain { margin-bottom: 16px; }
+  details.explain summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 10px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  details.explain summary:hover { color: var(--text); }
+  details.explain[open] summary { border-radius: 12px 12px 0 0; }
+  .explain-body { background: var(--panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 12px 18px; font-size: 0.86rem; }
+  .explain-body li { margin-bottom: 6px; }
 </style>
 </head>
 <body>
   <h1>迷信の誕生シミュレーション</h1>
-  <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
+  <p class="sub">エサは完全ランダム。それでも AI は「必勝法」を信じ始める — スキナーのハト実験（1948）のAI版</p>
 
-  <div class="panel">
-    <span class="badge">PR④ 描画コア＋UI</span>
-    <p style="margin:10px 0 0">
-      母集団パネル（Canvas）・信念集中度時系列・操作系（再生/一時停止/リセット・スライダー）を実装しました。
-      多数回試行K・ペルソナは後続PRで追加します。詳細は <code>README.md</code> を参照してください。
-    </p>
+  <div class="panel intro-panel">
+    <p class="intro-title">📖 30秒でわかるこの実験</p>
+    <div class="story-grid">
+      <div class="story-card">
+        <span class="story-num">1</span><b>エサは完全ランダム</b><br>
+        エサ（報酬）は確率 30% のくじ引きで出ます。<b>AI が何をしても、この確率は一切変わりません。</b>
+      </div>
+      <div class="story-card">
+        <span class="story-num">2</span><b>それでも「迷信」が生まれる</b><br>
+        たまたま直後にエサが出た行動を「効いた！」と学習 → その行動ばかり選ぶ → ますます信じ込む…という悪循環。
+      </div>
+      <div class="story-card">
+        <span class="story-num">3</span><b>「思い込み」で差がつくか？</b><br>
+        <b style="color:var(--accent)">A班＝公平に学ぶAI</b> と
+        <b style="color:var(--warn)">B班＝当たりだけ強く覚えるAI</b>を比べ、思い込みが迷信を強めるかを観察します。
+      </div>
+    </div>
   </div>
 
   <!-- コントロールパネル -->
   <div class="panel ctrl-panel-outer">
     <div class="ctrl-row">
-      <div class="ctrl-group">
-        <span class="ctrl-label">p（報酬確率）</span>
+      <div class="ctrl-group" title="各ステップでエサ（報酬）が出る確率。AIの行動とは無関係です">
+        <span class="ctrl-label">🎲 エサの確率 p</span>
         <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
         <span class="ctrl-val" id="val-p">0.30</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">α（学習率）</span>
+      <div class="ctrl-group" title="1回の結果をどれだけ強く覚えるか（学習率 α）">
+        <span class="ctrl-label">学習の速さ α</span>
         <input type="range" id="ctrl-alpha" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
         <span class="ctrl-val" id="val-alpha">0.10</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">ε（探索率）</span>
+      <div class="ctrl-group" title="たまに別の行動を試してみる確率（探索率 ε）">
+        <span class="ctrl-label">気まぐれ度 ε</span>
         <input type="range" id="ctrl-epsilon" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
         <span class="ctrl-val" id="val-epsilon">0.10</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">β（確証バイアス, B）</span>
+      <div class="ctrl-group" title="B班のみ: 当たりを強く・外れを弱く覚える度合い（確証バイアス β）。0 にすると A班と完全に同じになります">
+        <span class="ctrl-label">思い込み β（B班）</span>
         <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
         <span class="ctrl-val" id="val-beta">0.50</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">速度</span>
-        <input type="range" id="ctrl-speed" class="ctrl-range" min="1" max="50" step="1" value="5">
-        <span class="ctrl-val" id="val-speed">5</span>
-        <span class="ctrl-label">step/f</span>
+      <div class="ctrl-group" title="1秒あたりの実行ステップ数。ゆっくり観察するなら小さく、結末を急ぐなら大きく">
+        <span class="ctrl-label">再生速度</span>
+        <input type="range" id="ctrl-speed" class="ctrl-range" min="5" max="600" step="5" value="30">
+        <span class="ctrl-val" id="val-speed">30</span>
+        <span class="ctrl-label">歩/秒</span>
       </div>
       <div class="ctrl-btns">
         <button class="sim-btn sim-btn-primary" id="btn-play">▶ 再生</button>
@@ -127,72 +155,105 @@
       </div>
     </div>
     <div class="ctrl-row ctrl-row-cold">
-      <span class="cold-hint">＊ リセット後に有効</span>
-      <div class="ctrl-group">
-        <span class="ctrl-label">V0 ＊</span>
+      <span class="cold-hint">＊ 変更はリセット後に反映</span>
+      <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
+        <span class="ctrl-label">最初の期待 V0 ＊</span>
         <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
         <span class="ctrl-val" id="val-V0">0.0</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">N（行動数）＊</span>
+      <div class="ctrl-group" title="AIが選べる行動の種類数">
+        <span class="ctrl-label">行動の種類 N ＊</span>
         <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
         <span class="ctrl-val" id="val-N">5</span>
       </div>
-      <div class="ctrl-group">
-        <span class="ctrl-label">seed ＊</span>
+      <div class="ctrl-group" title="乱数の種。同じ値なら毎回同じ展開を再現できます">
+        <span class="ctrl-label">乱数シード ＊</span>
         <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
       </div>
-      <span class="step-count">t = <span id="step-count">0</span></span>
+      <span class="step-count">経過ステップ t = <span id="step-count">0</span></span>
     </div>
+  </div>
+
+  <!-- ライブ解説 -->
+  <div class="narration">
+    <span class="nar-label">💡 いま起きていること</span><span id="narration-text">読み込み中…</span>
   </div>
 
   <!-- 母集団パネル -->
   <div class="panel" id="population-panel">
-    <h2 style="margin-top:0">母集団パネル — A（行動主義）/ B（確証バイアス β=<span id="lbl-beta">0.50</span>）</h2>
-    <canvas id="population-canvas" width="1000" height="160"></canvas>
-    <p style="margin:6px 0 0;font-size:0.78rem;color:var(--muted)">
-      タイルの色 = 最高価値行動　明るさ = 信念集中度（明るいほど迷信が強い）　下段ミニバー = 全行動の価値（最大値で正規化）
+    <h2 style="margin-top:0">👀 20体の AI をライブ観察</h2>
+    <p class="panel-sub">
+      上段 <b style="color:var(--accent)">A班＝当たりも外れも公平に学ぶ</b>　／　下段 <b style="color:var(--warn)">B班＝当たりだけ強く覚える（思い込み β=<span id="lbl-beta">0.50</span>）</b><br>
+      タイルの<b>色</b>＝その AI がいちばん「効く」と信じている行動　・　<b>明るいほど信じ込みが強い＝迷信が強い</b>　・　下端のミニバー＝各行動への期待の内訳
     </p>
+    <div class="legend-chips" id="action-legend"></div>
+    <canvas id="population-canvas" width="1000" height="210"></canvas>
   </div>
 
-  <!-- 信念集中度 時系列 -->
+  <!-- 迷信の強さ 時系列 -->
   <div class="panel">
-    <h2 style="margin-top:0">信念集中度の推移（集団平均 ± min/max）</h2>
+    <h2 style="margin-top:0">📈 迷信の強さの推移 — 思い込み（B班）は迷信を強めるか？</h2>
+    <p class="panel-sub">
+      線＝10体の平均、うすい帯＝10体のばらつき（最小〜最大）。
+      <b style="color:var(--warn)">黄色（B班）</b>の線が<b style="color:var(--accent)">青（A班）</b>より上にあるほど「思い込みが迷信を強めた」ことを示します。
+      ※「迷信の強さ」＝信念集中度（0〜1。期待が1つの行動に集中するほど 1 に近づく）
+    </p>
     <canvas id="timeseries-canvas" width="1000" height="220"></canvas>
   </div>
 
   <!-- 統計パネル -->
   <div class="panel" id="stats-panel">
-    <h2 style="margin-top:0">統計パネル</h2>
+    <h2 style="margin-top:0">🔢 いまの数字まとめ</h2>
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">A 平均信念集中度</div>
+        <div class="stat-label">A班の迷信の強さ（平均）</div>
         <div class="stat-value" id="stat-concA" style="color:var(--accent)">—</div>
+        <div class="stat-sub">公平に学ぶAI・0〜1</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">B 平均信念集中度</div>
+        <div class="stat-label">B班の迷信の強さ（平均）</div>
         <div class="stat-value" id="stat-concB" style="color:var(--warn)">—</div>
+        <div class="stat-sub">当たりだけ覚えるAI・0〜1</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">B − A（確証バイアスの効果）</div>
+        <div class="stat-label">差 B − A ＝ 思い込みの効果</div>
         <div class="stat-value" id="stat-diff">—</div>
+        <div class="stat-sub">プラスなら「思い込みが迷信を強めた」</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">累積報酬率（独立性の確認）</div>
+        <div class="stat-label">エサが実際に出た割合</div>
         <div class="stat-value" id="stat-rewRate">—</div>
-        <div class="stat-sub">報酬は行動に無関係 → p に一致するはず</div>
+        <div class="stat-sub">設定とほぼ一致 ＝ 行動と無関係の証拠</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">ステップ数</div>
+        <div class="stat-label">経過ステップ</div>
         <div class="stat-value" id="stat-steps">0</div>
+        <div class="stat-sub">20体それぞれが経験した試行回数</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">独立性検定 p 値（A[0]、参考）</div>
+        <div class="stat-label">統計チェック：行動とエサは無関係か</div>
         <div class="stat-value" id="stat-pval" style="font-size:0.85rem">—</div>
-        <div class="stat-sub">単一の非有意は「独立の証明」ではない</div>
+        <div class="stat-sub">p値（参考）。「証明」ではなく「無関係と整合的」の確認</div>
       </div>
     </div>
   </div>
+
+  <!-- 詳しい仕組み（折りたたみ） -->
+  <details class="explain">
+    <summary>🔬 詳しい仕組みを見る — 数式・「恣意性を排する」設計（クリックで展開）</summary>
+    <div class="explain-body">
+      <ul style="margin:6px 0; padding-left:20px">
+        <li><b>A班の学習則（対称）</b>: <code>V[a] += α·(r − V[a])</code> — 当たりも外れも同じ重みで更新します。</li>
+        <li><b>B班の学習則（確証バイアス）</b>: 当たり時は <code>α·(1+β)</code>、外れ時は <code>α·(1−β)</code> の重みで更新。<b>β=0 にすると A班と数学的に完全一致</b>するため、A/B の差は純粋に β だけに帰属できます。</li>
+        <li><b>エサ生成は行動を参照できない構造</b>: 報酬関数 <code>createRewardStream(p, seed)</code> のスコープに行動変数は存在せず、毎ステップ必ず「エサ確定 → 行動選択」の順で実行されます（コード上で監査可能）。</li>
+        <li><b>「迷信の強さ」の定義</b>: 信念集中度（正規化 Herfindahl 指数）。期待値ベクトルが1つの行動に集中しているほど 1、全行動に均等なら 0。</li>
+        <li><b>行動の選び方は両班共通</b>（ε-greedy）: 違いは学習則だけ。統計チェックの p 値は単発では「証明」にならないため、「無関係と整合的」とだけ表現します。</li>
+      </ul>
+      <p style="margin:6px 0 0">
+        <span class="badge">開発状況: PR④ 描画コア＋UI</span>　詳細・監査ノートは <code>README.md</code> を参照してください。
+      </p>
+    </div>
+  </details>
 
 <script>
 "use strict";
@@ -723,6 +784,21 @@
     '#6ea8fe','#59d499','#e0b84c','#f28b82','#c58af9',
     '#80cbc4','#ffb74d','#ce93d8','#90a4ae','#a5d6a7',
   ];
+  // 行動の表示名（初見者向け: 丸数字で統一）
+  var ACT_NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+
+  // 行動色の凡例（HTML）を N に合わせて生成
+  function buildActionLegend() {
+    var el = document.getElementById('action-legend');
+    if (!el || !gPop) return;
+    var N = gPop.config.N;
+    var html = '<span>行動の色（どれもエサの出やすさは同じ）:</span>';
+    for (var i = 0; i < N; i++) {
+      html += '<span><span class="chip-swatch" style="background:' +
+        ACT_COLORS[i % ACT_COLORS.length] + '"></span>行動' + (ACT_NUM[i] || (i + 1)) + '</span>';
+    }
+    el.innerHTML = html;
+  }
 
   // 線形スケール関数
   function scaleLinear(d0, d1, r0, r1) {
@@ -742,12 +818,28 @@
     ctx.clearRect(0, 0, W, H);
 
     var M = pop.A.length;
-    var tw = W / M, th = H / 2, mg = 2;
+    var bandH = 20;              // 各行上部の班ラベル帯
+    var rowH  = H / 2;
+    var tw = W / M, mg = 2;
+
+    var ROW_META = {
+      A: { label: 'A班：当たりも外れも公平に学ぶ', color: '#6ea8fe', band: 'rgba(110,168,254,0.10)' },
+      B: { label: 'B班：当たりだけ強く覚える（思い込みあり）', color: '#e0b84c', band: 'rgba(224,184,76,0.10)' },
+    };
 
     ['A', 'B'].forEach(function (kind, row) {
+      var rowY = row * rowH;
+
+      // 班ラベル帯
+      ctx.fillStyle = ROW_META[kind].band;
+      ctx.fillRect(0, rowY, W, bandH);
+      ctx.fillStyle = ROW_META[kind].color;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(ROW_META[kind].label, 6, rowY + 15);
+
       pop[kind].forEach(function (sim, col) {
-        var x = col * tw + mg, y = row * th + mg;
-        var iw = tw - mg * 2, ih = th - mg * 2;
+        var x = col * tw + mg, y = rowY + bandH + mg;
+        var iw = tw - mg * 2, ih = rowH - bandH - mg * 2;
         var conc = beliefConcentrationHerfindahl(sim.agent.V);
         var dom  = dominantAction(sim.agent.V);
 
@@ -774,23 +866,18 @@
           ctx.fillRect(bx, by, Math.max(0, frac * (bw - 1)), 5);
         }
 
-        // テキスト
-        ctx.fillStyle = 'rgba(230,232,238,0.95)';
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText(kind + col, x + 3, y + 14);
-        ctx.fillStyle = 'rgba(154,163,178,0.9)';
-        ctx.font = '10px monospace';
-        ctx.fillText('a' + dom, x + 3, y + 26);
-        ctx.fillText(conc.toFixed(2), x + 3, y + 38);
+        // テキスト（明るいタイルでも読めるよう影付き）
+        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = 3;
+        ctx.fillStyle = 'rgba(240,243,250,0.95)';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(kind + (col + 1), x + 4, y + 14);
+        ctx.font = '10px sans-serif';
+        ctx.fillText((ACT_NUM[dom] || dom + 1) + ' を信じる', x + 4, y + 28);
+        ctx.fillText('迷信 ' + conc.toFixed(2), x + 4, y + 41);
+        ctx.shadowBlur = 0;
       });
     });
-
-    // 行ラベル（左端）
-    ctx.fillStyle = 'rgba(110,168,254,0.7)';
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText('A', 3, th - 3);
-    ctx.fillStyle = 'rgba(224,184,76,0.7)';
-    ctx.fillText('B', 3, H - 3);
   }
 
   // --- 履歴記録 ---
@@ -820,7 +907,7 @@
     if (gHistA.length < 2) {
       ctx.fillStyle = '#9aa3b2';
       ctx.font = '13px sans-serif';
-      ctx.fillText('▶ 再生ボタンを押してシミュレーションを開始してください', 24, H / 2 + 5);
+      ctx.fillText('まもなくグラフが伸びていきます…（動かない場合は ▶ 再生 を押してください）', 24, H / 2 + 5);
       return;
     }
 
@@ -876,24 +963,24 @@
     ctx.translate(10, pad.t + ph / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center'; ctx.fillText('信念集中度', 0, 0);
+    ctx.textAlign = 'center'; ctx.fillText('迷信の強さ', 0, 0);
     ctx.restore();
     ctx.textAlign = 'left';
 
     // X 軸 t 表示
-    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
-    ctx.fillText('t=' + gHistA[gHistA.length - 1].t.toLocaleString(), pad.l + pw - 68, H - 4);
+    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
+    ctx.fillText('経過 t=' + gHistA[gHistA.length - 1].t.toLocaleString(), pad.l + pw - 90, H - 4);
 
     // 凡例
     var lx = pad.l + 8, ly = pad.t + 6;
     var lastA = gHistA[gHistA.length - 1], lastB = gHistB[gHistB.length - 1];
     [
-      ['#6ea8fe', 'A（行動主義）', lastA ? lastA.mean : 0],
-      ['#e0b84c', 'B（確証バイアス）', lastB ? lastB.mean : 0],
+      ['#6ea8fe', 'A班（公平に学ぶ）', lastA ? lastA.mean : 0],
+      ['#e0b84c', 'B班（当たりだけ覚える）', lastB ? lastB.mean : 0],
     ].forEach(function (e, i) {
-      ctx.fillStyle = e[0]; ctx.fillRect(lx, ly + i * 14, 14, 3);
-      ctx.fillStyle = '#e6e8ee'; ctx.font = '10px monospace';
-      ctx.fillText(e[1] + '  ' + e[2].toFixed(3), lx + 18, ly + i * 14 + 8);
+      ctx.fillStyle = e[0]; ctx.fillRect(lx, ly + i * 15, 14, 3);
+      ctx.fillStyle = '#e6e8ee'; ctx.font = '11px sans-serif';
+      ctx.fillText(e[1] + '  ' + e[2].toFixed(3), lx + 18, ly + i * 15 + 8);
     });
   }
 
@@ -915,7 +1002,7 @@
       ge('stat-diff').style.color = diff > 0.02 ? 'var(--warn)' : diff < -0.02 ? 'var(--ok)' : 'var(--muted)';
     }
     if (ge('stat-rewRate'))
-      ge('stat-rewRate').textContent = rewRate.toFixed(3) + ' (目標 p=' + gPop.config.p.toFixed(2) + ')';
+      ge('stat-rewRate').textContent = (rewRate * 100).toFixed(1) + '%（設定 ' + Math.round(gPop.config.p * 100) + '%）';
     if (ge('stat-steps'))  ge('stat-steps').textContent  = (gPop.t || 0).toLocaleString();
     if (ge('step-count'))  ge('step-count').textContent  = (gPop.t || 0).toLocaleString();
     if (ge('lbl-beta') && gPop.B.length > 0) ge('lbl-beta').textContent = gPop.B[0].beta.toFixed(2);
@@ -927,14 +1014,45 @@
       var pEl = ge('stat-pval');
       if (pEl) {
         if (isNaN(tr.p)) {
-          pEl.textContent = 'N/A（データ不足）';
+          pEl.textContent = 'N/A（まだデータ不足）';
           pEl.style.color = 'var(--muted)';
         } else {
-          pEl.textContent = tr.p.toFixed(4) + (tr.p < 0.05 ? '  ⚠ 偶発的' : '  ✓ 整合的');
+          pEl.textContent = 'p=' + tr.p.toFixed(4) + (tr.p < 0.05 ? '  ⚠ たまたま有意（約5%で起こる）' : '  ✓ 無関係と整合的');
           pEl.style.color = tr.p < 0.05 ? 'var(--warn)' : 'var(--ok)';
         }
       }
     }
+
+    updateNarration(concA, concB, diff, rewRate);
+  }
+
+  // --- ライブ解説文（初見者向けのいちばんの道しるべ） ---
+  function updateNarration(concA, concB, diff, rewRate) {
+    var el = document.getElementById('narration-text');
+    if (!el || !gPop) return;
+    var t = gPop.t || 0;
+    var beta = gPop.B.length > 0 ? gPop.B[0].beta : 0;
+    var pPct = Math.round(gPop.config.p * 100);
+    var msg;
+
+    if (t === 0) {
+      msg = 'エサは確率 ' + pPct + '% の完全ランダム。それでも AI は「必勝法」を信じ始めるでしょうか？ まもなく自動でスタートします。';
+    } else if (beta === 0) {
+      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（差はほぼ 0 のはず）。βスライダーを上げると差が生まれる様子を観察できます。';
+    } else {
+      msg = 'エサはランダムに出ています（実測 ' + (rewRate * 100).toFixed(1) + '% ≒ 設定 ' + pPct + '%）。';
+      if (diff > 0.02) {
+        var ratio = concA > 0.01 ? concB / concA : Infinity;
+        var comp = (isFinite(ratio) && ratio >= 1.15) ? 'の約' + ratio.toFixed(1) + '倍' : 'を上回る水準';
+        msg += 'それでも B班の迷信の強さ ' + concB.toFixed(2) + ' は A班 ' + concA.toFixed(2) + ' ' + comp +
+               ' — 「当たりだけ覚える」思い込みが、根拠のない迷信を強めています。';
+      } else if (diff < -0.02) {
+        msg += 'いまは A班の迷信が B班を上回っています。長く回すと「気まぐれ（ε）」の探索で迷信は薄れていきます — 迷信が生まれる瞬間を見るには ↺ リセットしてください。';
+      } else {
+        msg += 'いまのところ A班と B班の差はわずかです。序盤〜中盤（t≦3000あたり）で思い込みの効果が数字に表れやすくなります。';
+      }
+    }
+    el.textContent = msg;
   }
 
   // --- 設定の読み取り ---
@@ -996,6 +1114,7 @@
     gHistA = []; gHistB = [];
     gFrameN = 0;
     recordHistory(gPop);
+    buildActionLegend();
     renderAll();
   }
 
@@ -1008,12 +1127,23 @@
     updateStatsPanel();
   }
 
-  // rAF ループ
-  function tick() {
+  // rAF ループ（時間ベース: ディスプレイの Hz に依存しない「ステップ/秒」実行）
+  var gLastTick  = 0;  // 前フレームの timestamp（ms）
+  var gStepCarry = 0;  // 端数ステップの繰り越し
+
+  function tick(ts) {
     if (!gPlaying) return;
-    var steps = parseInt(document.getElementById('ctrl-speed').value) || 5;
+    if (!gLastTick) gLastTick = ts;
+    var dt = Math.min((ts - gLastTick) / 1000, 0.25); // タブ復帰時の一括実行を防ぐ
+    gLastTick = ts;
+
+    var rate = parseInt(document.getElementById('ctrl-speed').value) || 30; // ステップ/秒
+    gStepCarry += dt * rate;
+    var steps = Math.floor(gStepCarry);
+    gStepCarry -= steps;
+
     for (var i = 0; i < steps; i++) if (gPop) stepPopulation(gPop);
-    if (gPop) recordHistory(gPop);
+    if (gPop && steps > 0) recordHistory(gPop);
     gFrameN++;
     if (gFrameN % gRenderSkip === 0) renderAll();
     gAnimId = requestAnimationFrame(tick);
@@ -1024,6 +1154,7 @@
     var btn = document.getElementById('btn-play');
     if (btn) btn.textContent = v ? '⏸ 一時停止' : '▶ 再生';
     if (v) {
+      gLastTick = 0; gStepCarry = 0; // 一時停止中の経過時間を持ち越さない
       gAnimId = requestAnimationFrame(tick);
     } else {
       if (gAnimId) { cancelAnimationFrame(gAnimId); gAnimId = null; }
@@ -1189,6 +1320,8 @@
     smokeTest();
     wireControls();
     resetSim();
+    // 初見者向け: 開いた瞬間から動き出す（▶ を探させない）
+    setPlaying(true);
   }
 
   if (document.readyState === "loading") {
