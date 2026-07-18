@@ -120,9 +120,12 @@
   .ctrl-cat-ai { border-top: 2px solid #e0b84c; }
   .ctrl-cat-play { border-top: 2px solid #59d499; }
   .ctrl-cat-title { font-size: 0.79rem; font-weight: bold; color: var(--text); margin-bottom: 9px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-  .ctrl-cat-body { display: flex; flex-wrap: wrap; gap: 9px 14px; align-items: center; }
+  .ctrl-cat-body { display: flex; flex-wrap: wrap; gap: 9px 14px; align-items: flex-start; }
   .ctrl-cat-body .step-count { margin-left: 0; }
   .ctrl-cat-hint { display: block; margin-top: 10px; font-size: 0.76rem; color: var(--warn); }
+  .ctrl-group-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl-hint-text { font-size: 0.72rem; color: var(--muted); line-height: 1.4; max-width: 200px; }
+  .ctrl-hint-text em { color: var(--ok); font-style: normal; font-weight: bold; } /* hint emphasis */
 </style>
 </head>
 <body>
@@ -150,7 +153,7 @@
 
   <!-- プリセット（見どころをワンクリック体験） -->
   <div class="preset-row">
-    <span class="preset-lead">▶ まずは“見どころ”をワンクリック：</span>
+    <span class="preset-lead">▶ まずは"見どころ"をワンクリック：</span>
     <button class="preset-btn" data-preset="runaway">🔥 迷信が暴走する</button>
     <button class="preset-btn" data-preset="vanish">🧊 迷信が消える（V0を上げる）</button>
     <button class="preset-btn" data-preset="equal">⚖️ 思い込みを消す（A＝B）</button>
@@ -169,14 +172,20 @@
             <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
             <span class="ctrl-val" id="val-p">0.30</span>
           </div>
-          <div class="ctrl-group" title="AIが試す“おまじない（行動）”の種類数">
-            <span class="ctrl-label">おまじないの数 N＊</span>
-            <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
-            <span class="ctrl-val" id="val-N">5</span>
+          <div class="ctrl-group-wrap">
+            <div class="ctrl-group" title="AIが試すおまじない（行動）の種類数">
+              <span class="ctrl-label">おまじないの数 N＊</span>
+              <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
+              <span class="ctrl-val" id="val-N">5</span>
+            </div>
+            <div class="ctrl-hint-text">種類が少ないほど迷信が<em>1つに集中</em>しやすい</div>
           </div>
-          <div class="ctrl-group" title="乱数の種。同じ値なら毎回同じ展開を再現できます">
-            <span class="ctrl-label">乱数シード＊</span>
-            <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
+          <div class="ctrl-group-wrap">
+            <div class="ctrl-group" title="乱数の種。同じ数字なら毎回同じ展開を再現できます">
+              <span class="ctrl-label">展開パターン＊</span>
+              <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
+            </div>
+            <div class="ctrl-hint-text">数字を変えると<em>別のストーリー</em>に。同じ数字なら毎回同じ展開</div>
           </div>
         </div>
       </div>
@@ -199,10 +208,13 @@
             <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
             <span class="ctrl-val" id="val-beta">0.50</span>
           </div>
-          <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
-            <span class="ctrl-label">最初の期待 V0＊</span>
-            <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
-            <span class="ctrl-val" id="val-V0">0.0</span>
+          <div class="ctrl-group-wrap">
+            <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
+              <span class="ctrl-label">最初の期待 V0＊</span>
+              <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
+              <span class="ctrl-val" id="val-V0">0.0</span>
+            </div>
+            <div class="ctrl-hint-text">p より<em>高くすると迷信が消えやすい</em>（🧊 プリセットで確認）</div>
           </div>
         </div>
       </div>
@@ -222,7 +234,7 @@
         </div>
       </div>
     </div>
-    <span class="ctrl-cat-hint">＊（おまじないの数・乱数シード・最初の期待）の変更は ↺リセット後に反映されます</span>
+    <span class="ctrl-cat-hint">＊（おまじないの数・展開パターン・最初の期待）の変更は ↺リセット後に反映されます</span>
   </div>
 
   <!-- ライブ解説 -->
@@ -235,7 +247,7 @@
     <h2 style="margin-top:0">👀 20体の AI をライブ観察</h2>
     <p class="panel-sub">
       上段 <b style="color:var(--accent)">A班＝当たりも外れも公平に学ぶ</b>　／　下段 <b style="color:var(--warn)">B班＝当たりだけ強く覚える（思い込み β=<span id="lbl-beta">0.50</span>）</b><br>
-      タイルの<b>色</b>＝いちばん「効く」と信じている行動（＝その AI の“儀式”）　・　<b>明るいほど過信が強い＝迷信が強い</b>（🔒＝儀式に固執）　・　下端のミニバー＝各行動への期待の内訳
+      タイルの<b>色</b>＝いちばん「効く」と信じている行動（＝その AI の"儀式"）　・　<b>明るいほど過信が強い＝迷信が強い</b>（🔒＝儀式に固執）　・　下端のミニバー＝各行動への期待の内訳
     </p>
     <div class="legend-chips" id="action-legend"></div>
     <canvas id="population-canvas" width="1000" height="210"></canvas>
@@ -245,7 +257,7 @@
   <div class="panel">
     <h2 style="margin-top:0">📈 「効く」と信じる強さの推移 — 現実（点線）をどれだけ超えて過信するか</h2>
     <p class="panel-sub">
-      縦軸＝“お気に入りの行動が効く”と信じている強さ。<b>点線＝真の報酬確率 p（現実）</b>。線＝10体平均、うすい帯＝ばらつき。<br>
+      縦軸＝"お気に入りの行動が効く"と信じている強さ。<b>点線＝真の報酬確率 p（現実）</b>。線＝10体平均、うすい帯＝ばらつき。<br>
       <b style="color:var(--warn)">黄色（B班）</b>の線が点線を大きく超えて上に行くほど「過信＝迷信」が強い。<b style="color:var(--accent)">青（A班）</b>は点線付近に張り付く＝現実どおりで迷信なし。この差が「思い込みが迷信を生む」証拠です。
     </p>
     <canvas id="timeseries-canvas" width="1000" height="220"></canvas>
@@ -306,7 +318,7 @@
         <li><b>A班の学習則（対称）</b>: <code>V[a] += α·(r − V[a])</code> — 当たりも外れも同じ重みで更新します。</li>
         <li><b>B班の学習則（確証バイアス）</b>: 当たり時は <code>α·(1+β)</code>、外れ時は <code>α·(1−β)</code> の重みで更新。<b>β=0 にすると A班と数学的に完全一致</b>するため、A/B の差は純粋に β だけに帰属できます。</li>
         <li><b>エサ生成は行動を参照できない構造</b>: 報酬関数 <code>createRewardStream(p, seed)</code> のスコープに行動変数は存在せず、毎ステップ必ず「エサ確定 → 行動選択」の順で実行されます（コード上で監査可能）。</li>
-        <li><b>「迷信の強さ」の定義＝過信度</b>: <code>(max(V) − p) / (1 − p)</code> を [0,1] に正規化。いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えて膨らんでいるか。0＝現実どおり（迷信なし）、1＝「絶対効く」と確信。A班は真の p に収束するため≈0、B班は確証バイアスで p を超えて膨張。<b>この「過信」が特定の行動を“儀式”に変えます。</b>（旧版の信念集中度＝Herfindahl は、B班が全行動を一律に過信すると逆に下がり中心命題を示せないため、副指標に降格しました。）</li>
+        <li><b>「迷信の強さ」の定義＝過信度</b>: <code>(max(V) − p) / (1 − p)</code> を [0,1] に正規化。いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えて膨らんでいるか。0＝現実どおり（迷信なし）、1＝「絶対効く」と確信。A班は真の p に収束するため≈0、B班は確証バイアスで p を超えて膨張。<b>この「過信」が特定の行動を"儀式"に変えます。</b>（旧版の信念集中度＝Herfindahl は、B班が全行動を一律に過信すると逆に下がり中心命題を示せないため、副指標に降格しました。）</li>
         <li><b>行動の選び方は両班共通</b>（ε-greedy）: 違いは学習則だけ。統計チェックの p 値は単発では「証明」にならないため、「無関係と整合的」とだけ表現します。</li>
       </ul>
       <p style="margin:6px 0 0">
@@ -887,7 +899,7 @@
   ];
   // 行動の表示名（初見者向け: 丸数字で統一）
   var ACT_NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
-  // 行動の“おまじない”名（スキナーのハトの迷信行動にちなむ、意味のないしぐさ）。
+  // 行動の"おまじない"名（スキナーのハトの迷信行動にちなむ、意味のないしぐさ）。
   // どれもエサの出やすさとは無関係＝「効くと信じるのは迷信」という核心を具体化する。
   var ACT_NAMES = ['右回り','左回り','おじぎ','ジャンプ','足ぶみ','上向き','首ふり','けんけん','ゆらゆら','さけぶ'];
   var ACT_ICONS = ['🔄','🔁','🙇','🦘','👣','👆','🙆','🦶','🌊','📢'];
@@ -906,7 +918,7 @@
     var el = document.getElementById('action-legend');
     if (!el || !gPop) return;
     var N = gPop.config.N;
-    var html = '<span class="legend-title">行動＝AIが試す“おまじない”（どれもエサとは無関係＝意味なし）:</span>';
+    var html = '<span class="legend-title">行動＝AIが試す"おまじない"（どれもエサとは無関係＝意味なし）:</span>';
     for (var i = 0; i < N; i++) {
       html += '<span class="legend-item"><span class="chip-swatch" style="background:' +
         ACT_COLORS[i % ACT_COLORS.length] + '"></span>' + (ACT_ICONS[i] || '') + actName(i) + '</span>';
@@ -1151,8 +1163,8 @@
     var ge = function (id) { return document.getElementById(id); };
     if (ge('stat-concA')) ge('stat-concA').textContent = obA.toFixed(3);
     if (ge('stat-concB')) ge('stat-concB').textContent = obB.toFixed(3);
-    if (ge('stat-concA-sub')) ge('stat-concA-sub').textContent = '“効く”行動を平均 ' + Math.round(mvA * 100) + '% と評価（真は ' + pPct + '%）';
-    if (ge('stat-concB-sub')) ge('stat-concB-sub').textContent = '“効く”行動を平均 ' + Math.round(mvB * 100) + '% と評価（真は ' + pPct + '%）';
+    if (ge('stat-concA-sub')) ge('stat-concA-sub').textContent = '"効く"行動を平均 ' + Math.round(mvA * 100) + '% と評価（真は ' + pPct + '%）';
+    if (ge('stat-concB-sub')) ge('stat-concB-sub').textContent = '"効く"行動を平均 ' + Math.round(mvB * 100) + '% と評価（真は ' + pPct + '%）';
     if (ge('stat-diff')) {
       ge('stat-diff').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3);
       ge('stat-diff').style.color = diff > 0.03 ? 'var(--warn)' : diff < -0.03 ? 'var(--ok)' : 'var(--muted)';
@@ -1200,16 +1212,16 @@
     if (t === 0) {
       msg = 'エサは確率 ' + pPct + '% の完全ランダム。AI が何をしてもこの確率は変わりません。それでも「効く行動がある」と信じ込むでしょうか？ まもなく自動でスタートします。';
     } else if (beta === 0) {
-      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（過信度の差はほぼ 0）。両班とも“お気に入り”を真の ' + pPct + '% 前後で正しく評価 ＝ 迷信は生まれません。β を上げると B班だけが過信し始めます。';
+      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（過信度の差はほぼ 0）。両班とも"お気に入り"を真の ' + pPct + '% 前後で正しく評価 ＝ 迷信は生まれません。β を上げると B班だけが過信し始めます。';
     } else {
       msg = 'エサはランダムに出ています（実測 ' + (rewRate * 100).toFixed(1) + '% ≒ 設定 ' + pPct + '%、行動とは無関係）。';
       if (diff > 0.03) {
-        msg += 'それでも B班は“お気に入りの行動”を平均 ' + Math.round(mvB * 100) + '% 効くと過信（真は ' + pPct +
-               '%）。一方 A班は ' + Math.round(mvA * 100) + '% でほぼ正確。「当たりだけ覚える」思い込みが、根拠のない“儀式（迷信）”を生んでいます。';
+        msg += 'それでも B班は"お気に入りの行動"を平均 ' + Math.round(mvB * 100) + '% 効くと過信（真は ' + pPct +
+               '%）。一方 A班は ' + Math.round(mvA * 100) + '% でほぼ正確。「当たりだけ覚える」思い込みが、根拠のない"儀式（迷信）"を生んでいます。';
       } else if (diff < -0.03) {
         msg += 'いまは偶然のゆらぎで A班の過信が B班を上回っています。再生を続けると B班の過信が真の ' + pPct + '% を超えて育っていきます。';
       } else {
-        msg += 'いまのところ両班の過信度は近い水準です。再生を続けると、B班の“お気に入り”への評価が真の ' + pPct + '% を超えて膨らんでいきます。';
+        msg += 'いまのところ両班の過信度は近い水準です。再生を続けると、B班の"お気に入り"への評価が真の ' + pPct + '% を超えて膨らんでいきます。';
       }
     }
     el.textContent = msg;
