@@ -384,10 +384,42 @@
         <li><b>行動の選び方は両班共通</b>（ε-greedy）: 違いは学習則だけ。統計チェックの p 値は単発では「証明」にならないため、「無関係と整合的」とだけ表現します。</li>
       </ul>
       <p style="margin:6px 0 0">
-        <span class="badge">開発状況: PR④ 描画コア＋UI</span>　詳細・監査ノートは <code>README.md</code> を参照してください。
+        <span class="badge">開発状況: PR⑤ 多数回試行＋較正</span>　詳細・監査ノートは <code>README.md</code> を参照してください。
       </p>
     </div>
   </details>
+
+  <!-- 多数回試行パネル（PR⑤） -->
+  <div class="panel" id="batch-panel">
+    <h2 style="margin-top:0">🔬 多数回試行：統計的確証（K=100 回繰り返し）</h2>
+    <p class="panel-sub">
+      同じ設定でランダムな展開を K 回繰り返して「どの行動が一番信じられたか」を集計します。<br>
+      ①<b>行動が一様に選ばれる</b>なら「コードのえこひいきなし」、②<b>A班のp値が均等に散らばる</b>なら独立性検定は正しく較正されています（偽陽性率≈5%）。
+    </p>
+    <div class="ctrl-essentials" style="margin-bottom:16px">
+      <div class="ctrl-group">
+        <span class="ctrl-label">試行回数 K</span>
+        <input type="number" id="ctrl-K" class="ctrl-num" value="100" min="10" max="500" step="10" style="width:72px">
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">1試行あたり T ステップ</span>
+        <input type="number" id="ctrl-T-batch" class="ctrl-num" value="500" min="100" max="3000" step="100" style="width:80px">
+      </div>
+      <button class="sim-btn sim-btn-primary" id="btn-run-batch">▶ K 回試行を実行</button>
+      <span id="batch-status" style="color:var(--muted);font-size:0.88rem;display:none"></span>
+    </div>
+    <h2 style="margin:0 0 5px">① どの"儀式"が選ばれたか（各行動が"最も信じられた"回数 / K 回中）</h2>
+    <p class="panel-sub">A班（青）・B班（橙）それぞれで、どの行動が儀式になったかを集計。<b>点線＝期待値 K/N</b>（一様ならコードのえこひいきなし）。</p>
+    <canvas id="dominant-action-canvas" width="1000" height="220"></canvas>
+    <div id="batch-uniformity-result" style="margin:8px 0 18px"></div>
+    <h2 style="margin:0 0 5px">② 独立性検定のp値分布（A・B班。一様較正の確認）</h2>
+    <p class="panel-sub">
+      K 回試行のそれぞれで行動×報酬の独立性検定を実施し、p値を0〜1の10段に集計。<br>
+      <b>p値が均等に分布</b>すれば検定は正しく較正（偽陽性率≈5%）。<b>点線＝各系列の期待頻度</b>。B班は固着後に行動が集中するため分割表が sparse になり有効な p値が少なくなります（除外数を表示）。
+    </p>
+    <canvas id="pval-hist-canvas" width="1000" height="180"></canvas>
+    <p class="panel-sub" style="margin-top:6px">統計的「証明」ではなく「独立と整合的（consistent with independence）」の確認です。</p>
+  </div>
 
 <script>
 "use strict";
@@ -1464,6 +1496,31 @@
       setPlaying(true);
     });
 
+    // K 回試行の実行ボタン
+    var batchBtn = document.getElementById('btn-run-batch');
+    if (batchBtn) batchBtn.addEventListener('click', function () {
+      var K = Math.max(10, parseInt(document.getElementById('ctrl-K').value) || 100);
+      var T = Math.max(100, parseInt(document.getElementById('ctrl-T-batch').value) || 500);
+      var hot = readHotConfig();
+      var cold = readColdConfig();
+      var config = {
+        N: cold.N, p: hot.p, alpha: hot.alpha,
+        epsilon: hot.epsilon, beta: hot.beta, V0: cold.V0, seed: cold.seed,
+      };
+      var statusEl = document.getElementById('batch-status');
+      if (statusEl) { statusEl.textContent = 'K=' + K + ' × T=' + T + ' 実行中…'; statusEl.style.display = ''; }
+      setTimeout(function () {
+        var result = runBatch(K, T, config);
+        var daC = document.getElementById('dominant-action-canvas');
+        var pvC = document.getElementById('pval-hist-canvas');
+        var unifEl = document.getElementById('batch-uniformity-result');
+        if (daC) drawDominantActionHistogram(daC, result);
+        if (pvC) drawPValueHistogramChart(pvC, result);
+        if (unifEl) renderBatchUniformityResult(result, unifEl);
+        if (statusEl) statusEl.textContent = '完了（K=' + result.K + ' 回、各 T=' + result.T + ' ステップ）';
+      }, 0);
+    });
+
     // プリセット（見どころワンクリック）
     var presetBtns = document.querySelectorAll('.preset-btn');
     for (var i = 0; i < presetBtns.length; i++) {
@@ -1508,6 +1565,332 @@
     setPlaying(false);
     resetSim();      // コールド値（V0/N/seed）を反映して作り直し
     setPlaying(true);
+  }
+
+  // ===== SECTION: Batch（PR⑤）多数回試行 =================================
+
+  /**
+   * runBatch: K 回の独立試行を実行し、優勢行動と p値を集計して返す。
+   * 各試行は baseSeed から xmur3 ハッシュで独立なシードを導出する。
+   */
+  function runBatch(K, T, config) {
+    var N = config.N;
+    var dominantCountsA = new Array(N).fill(0);
+    var dominantCountsB = new Array(N).fill(0);
+    var pValsA = [], pValsB = [];
+    var excludedA = 0, excludedB = 0;
+
+    for (var k = 0; k < K; k++) {
+      var batchSeed = deriveSeed(config.seed, "batch", k);
+      var batchCfg = { seed: batchSeed, N: N, p: config.p, V0: config.V0 };
+      var traits = { alpha: config.alpha, epsilon: config.epsilon, beta: config.beta };
+
+      // A・B 各1体（personaIndex=0）。報酬ストリームは同一（ペア比較）
+      var simA = createSimulation(batchCfg, "A", 0, traits);
+      var simB = createSimulation(batchCfg, "B", 0, traits);
+      for (var t = 0; t < T; t++) {
+        stepSimulation(simA);
+        stepSimulation(simB);
+      }
+
+      // 優勢行動（同率タイブレークは sim の actionRng を使う＝公平性の要）
+      dominantCountsA[argmaxWithRandomTieBreak(simA.agent.V, simA.actionRng)]++;
+      dominantCountsB[argmaxWithRandomTieBreak(simB.agent.V, simB.actionRng)]++;
+
+      // p値（A・B両方収集。df<1 になるケースは除外してカウント）
+      var tblA = buildContingencyTable(simA.agent);
+      var resA = chiSquareIndependenceTest(tblA);
+      if (typeof resA.p === "number" && !isNaN(resA.p)) pValsA.push(resA.p);
+      else excludedA++;
+
+      var tblB = buildContingencyTable(simB.agent);
+      var resB = chiSquareIndependenceTest(tblB);
+      if (typeof resB.p === "number" && !isNaN(resB.p)) pValsB.push(resB.p);
+      else excludedB++;
+    }
+
+    return {
+      K: K, T: T, N: N,
+      dominantCountsA: dominantCountsA,
+      dominantCountsB: dominantCountsB,
+      pValsA: pValsA,
+      pValsB: pValsB,
+      excludedA: excludedA,
+      excludedB: excludedB,
+      uniformityA: chiSquareGoodnessOfFitUniform(dominantCountsA),
+      uniformityB: chiSquareGoodnessOfFitUniform(dominantCountsB),
+    };
+  }
+
+  /**
+   * drawDominantActionHistogram: 各行動が優勢になった回数を
+   * A班（青）・B班（橙）の隣り合わせ棒グラフで描画する。
+   */
+  function drawDominantActionHistogram(canvas, result) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var N = result.N, K = result.K;
+    if (!result.dominantCountsA || result.dominantCountsA.every(function (v) { return v === 0; })) {
+      ctx.fillStyle = C.emptyText;
+      ctx.font = '13px sans-serif';
+      ctx.fillText('▶ K 回試行を実行 ボタンを押してください', 24, H / 2 + 5);
+      return;
+    }
+
+    var pad = { t: 20, r: 20, b: 52, l: 44 };
+    var pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+
+    var maxCount = 0;
+    for (var i = 0; i < N; i++) {
+      maxCount = Math.max(maxCount, result.dominantCountsA[i], result.dominantCountsB[i]);
+    }
+    var yMax = Math.max(K / N * 2.5, maxCount) * 1.15;
+    var scY = scaleLinear(0, yMax, pad.t + ph, pad.t);
+
+    // グリッド
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    var gridVals = [0, Math.round(yMax / 4), Math.round(yMax / 2), Math.round(yMax * 3 / 4), Math.round(yMax)];
+    gridVals.forEach(function (v) {
+      var gy = scY(v);
+      ctx.strokeStyle = C.gridLine;
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(v, pad.l - 4, gy + 3);
+    });
+    ctx.setLineDash([]);
+
+    // 期待値 K/N の水平点線
+    var expected = K / N;
+    var ey = scY(expected);
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = C.refLine;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(pad.l, ey); ctx.lineTo(pad.l + pw, ey); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = C.refLabel; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('期待値 K/N=' + expected.toFixed(1), pad.l + pw, ey - 4);
+
+    // 棒グラフ（各行動で A・B を隣り合わせ）
+    var groupW = pw / N;
+    var barW = groupW * 0.3;
+    var gap = groupW * 0.06;
+    var baseY = pad.t + ph;
+    for (var i = 0; i < N; i++) {
+      var cx = pad.l + groupW * i + groupW / 2;
+
+      // A班（青）
+      var hA = baseY - scY(result.dominantCountsA[i]);
+      ctx.fillStyle = C.seriesALine;
+      ctx.globalAlpha = 0.75;
+      ctx.fillRect(cx - barW - gap / 2, scY(result.dominantCountsA[i]), barW, hA);
+
+      // B班（橙）
+      var hB = baseY - scY(result.dominantCountsB[i]);
+      ctx.fillStyle = C.seriesBLine;
+      ctx.fillRect(cx + gap / 2, scY(result.dominantCountsB[i]), barW, hB);
+      ctx.globalAlpha = 1;
+
+      // 数値ラベル
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+      if (result.dominantCountsA[i] > 0)
+        ctx.fillText(result.dominantCountsA[i], cx - barW / 2 - gap / 2, scY(result.dominantCountsA[i]) - 3);
+      if (result.dominantCountsB[i] > 0)
+        ctx.fillText(result.dominantCountsB[i], cx + barW / 2 + gap / 2, scY(result.dominantCountsB[i]) - 3);
+
+      // x ラベル（アイコン + 行動名）
+      var lbl = (ACT_ICONS[i] || '') + ' ' + (ACT_NAMES[i] || ('行動' + (i + 1)));
+      ctx.fillStyle = C.legendText; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(lbl, cx, baseY + 16);
+      // 丸数字
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace';
+      ctx.fillText(ACT_NUM[i] || (i + 1), cx, baseY + 28);
+    }
+
+    // 軸
+    ctx.strokeStyle = C.axisLine; ctx.lineWidth = 1; ctx.textAlign = 'left';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph);
+    ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
+
+    // Y 軸タイトル
+    ctx.save();
+    ctx.translate(10, pad.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('優勢だった回数', 0, 0);
+    ctx.restore();
+
+    // 凡例
+    var lx = pad.l + 8, ly = pad.t + 4;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = C.seriesALine; ctx.fillRect(lx, ly, 14, 10);
+    ctx.fillStyle = C.seriesBLine; ctx.fillRect(lx + 70, ly, 14, 10);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = C.legendText; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('A班（公平に学ぶ）', lx + 18, ly + 9);
+    ctx.fillText('B班（当たりだけ覚える）', lx + 88, ly + 9);
+  }
+
+  /**
+   * drawPValueHistogramChart: 独立性検定の p値分布を 10 ビンのヒストグラムで表示。
+   * A班（青）・B班（橙）を各ビン内で隣り合わせにし、較正の確認に使う。
+   */
+  function drawPValueHistogramChart(canvas, result) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (!result.pValsA || result.pValsA.length === 0) {
+      ctx.fillStyle = C.emptyText;
+      ctx.font = '13px sans-serif';
+      ctx.fillText('▶ K 回試行を実行 ボタンを押してください', 24, H / 2 + 5);
+      return;
+    }
+
+    var BINS = 10;
+    var binsA = new Array(BINS).fill(0);
+    var binsB = new Array(BINS).fill(0);
+    result.pValsA.forEach(function (p) {
+      var b = Math.min(BINS - 1, Math.floor(p * BINS));
+      binsA[b]++;
+    });
+    result.pValsB.forEach(function (p) {
+      var b = Math.min(BINS - 1, Math.floor(p * BINS));
+      binsB[b]++;
+    });
+
+    var pad = { t: 20, r: 20, b: 38, l: 44 };
+    var pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+    var maxCount = 0;
+    for (var i = 0; i < BINS; i++) maxCount = Math.max(maxCount, binsA[i], binsB[i]);
+    var expectedA = result.pValsA.length / BINS;
+    var expectedB = result.pValsB.length / BINS;
+    var yMax = Math.max(expectedA, expectedB, maxCount) * 1.5;
+    var scY = scaleLinear(0, yMax, pad.t + ph, pad.t);
+    var baseY = pad.t + ph;
+
+    // グリッド
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    [0, Math.round(yMax / 3), Math.round(yMax * 2 / 3), Math.round(yMax)].forEach(function (v) {
+      var gy = scY(v);
+      ctx.strokeStyle = C.gridLine;
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+      ctx.fillText(v, pad.l - 4, gy + 3);
+    });
+    ctx.setLineDash([]);
+
+    // 各系列の期待値点線
+    [
+      { exp: expectedA, color: C.seriesALine, dash: [6, 4] },
+      { exp: expectedB, color: C.seriesBLine, dash: [3, 3] },
+    ].forEach(function (s) {
+      if (s.exp <= 0) return;
+      ctx.setLineDash(s.dash);
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, scY(s.exp)); ctx.lineTo(pad.l + pw, scY(s.exp)); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    });
+
+    // 棒グラフ
+    var binW = pw / BINS;
+    var barW = binW * 0.3;
+    var gap = binW * 0.06;
+    for (var i = 0; i < BINS; i++) {
+      var binLeft = pad.l + binW * i;
+      var cx = binLeft + binW / 2;
+      // [0,.05) ビンは偽陽性領域: 赤めに強調
+      var isAlpha = (i === 0);
+      var colorA = isAlpha ? '#ef4444' : C.seriesALine;
+      var colorB = isAlpha ? '#f97316' : C.seriesBLine;
+
+      if (binsA[i] > 0) {
+        ctx.fillStyle = colorA;
+        ctx.globalAlpha = 0.72;
+        ctx.fillRect(cx - barW - gap / 2, scY(binsA[i]), barW, baseY - scY(binsA[i]));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(binsA[i], cx - barW / 2 - gap / 2, scY(binsA[i]) - 2);
+      }
+      if (binsB[i] > 0) {
+        ctx.fillStyle = colorB;
+        ctx.globalAlpha = 0.65;
+        ctx.fillRect(cx + gap / 2, scY(binsB[i]), barW, baseY - scY(binsB[i]));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(binsB[i], cx + barW / 2 + gap / 2, scY(binsB[i]) - 2);
+      }
+
+      // x ラベル（ビン境界）
+      ctx.fillStyle = C.axisLabel; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+      ctx.fillText((i * 0.1).toFixed(1), binLeft, baseY + 12);
+    }
+    // 末尾ラベル
+    ctx.fillStyle = C.axisLabel; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('1.0', pad.l + pw, baseY + 12);
+
+    // 軸
+    ctx.strokeStyle = C.axisLine; ctx.lineWidth = 1; ctx.textAlign = 'left';
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph);
+    ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
+
+    // Y 軸タイトル
+    ctx.save();
+    ctx.translate(10, pad.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('頻度（回）', 0, 0);
+    ctx.restore();
+
+    // 凡例（有効件数・除外数）
+    var lx = pad.l + 8, ly = pad.t + 4;
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = C.seriesALine; ctx.fillRect(lx, ly, 14, 10);
+    ctx.fillStyle = C.seriesBLine; ctx.fillRect(lx + 160, ly, 14, 10);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = C.legendText; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('A班 ' + result.pValsA.length + '件有効 / ' + result.excludedA + '件除外', lx + 18, ly + 9);
+    ctx.fillText('B班 ' + result.pValsB.length + '件有効 / ' + result.excludedB + '件除外', lx + 178, ly + 9);
+  }
+
+  /**
+   * renderBatchUniformityResult: 一様性検定の数値を stat-card で DOM に書き込む。
+   */
+  function renderBatchUniformityResult(result, el) {
+    function judgement(p) {
+      if (isNaN(p)) return '<span style="color:var(--muted)">判定不可（データ不足）</span>';
+      return p > 0.05
+        ? '<span style="color:var(--ok)">✅ 一様と整合的（えこひいきなし）</span>'
+        : '<span style="color:var(--warn)">⚠ やや偏り（p=' + p.toFixed(3) + '）</span>';
+    }
+    var uA = result.uniformityA, uB = result.uniformityB;
+    el.innerHTML =
+      '<div class="stats-grid">' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">一様性検定: A班（公平に学ぶ）</div>' +
+          '<div class="stat-value" style="font-size:0.95rem">' +
+            (isNaN(uA.p) ? '—' : 'χ²(' + uA.df + ')=' + uA.chi2.toFixed(2) + ', p=' + uA.p.toFixed(3)) +
+          '</div>' +
+          '<div class="stat-sub">' + judgement(uA.p) + '</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">一様性検定: B班（当たりだけ覚える）</div>' +
+          '<div class="stat-value" style="font-size:0.95rem">' +
+            (isNaN(uB.p) ? '—' : 'χ²(' + uB.df + ')=' + uB.chi2.toFixed(2) + ', p=' + uB.p.toFixed(3)) +
+          '</div>' +
+          '<div class="stat-sub">' + judgement(uB.p) + '</div>' +
+        '</div>' +
+      '</div>';
   }
 
   // ===== SECTION: Personas（PR⑥で実装） =============================
