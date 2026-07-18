@@ -4,18 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>迷信の誕生シミュレーション（スキナーのハト実験のAI版）</title>
+<meta name="description" content="報酬は完全ランダム。それでも AI は迷信を作る — スキナーのハト実験のAI版">
+
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #0f1117;
-    --panel: #171a23;
-    --panel-2: #1e222e;
-    --border: #2a2f3d;
-    --text: #e6e8ee;
-    --muted: #9aa3b2;
-    --accent: #6ea8fe;
-    --ok: #59d499;
-    --warn: #e0b84c;
+    --bg:      #ffffff;
+    --panel:   #ffffff;
+    --panel-2: #f9fafb;
+    --border:  #e5e7eb;
+    --text:    #111827;
+    --muted:   #6b7280;
+    --accent:  #2563eb;
+    --ok:      #059669;
+    --warn:    #d97706;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -24,19 +25,20 @@
     color: var(--text);
     font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
     line-height: 1.6;
-    padding: 24px;
-    max-width: 1100px;
+    padding: 40px 28px;
+    max-width: 1200px;
     margin: 0 auto;
   }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  h2 { font-size: 1.05rem; margin: 24px 0 8px; color: var(--accent); }
+  h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 1.05rem; font-weight: 700; margin: 24px 0 8px; color: var(--text); }
   .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 18px;
-    margin-bottom: 16px;
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   }
   .badge {
     display: inline-block;
@@ -55,35 +57,363 @@
   }
   .todo { color: var(--muted); font-style: italic; }
   .audit { color: var(--ok); }
+  /* PR④ コントロール・描画パネル */
+  .ctrl-panel-outer { padding: 12px 18px; }
+  .ctrl-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .ctrl-row-cold { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .ctrl-group { display: flex; align-items: center; gap: 5px; }
+  .ctrl-label { font-size: 0.80rem; color: var(--muted); white-space: nowrap; }
+  .ctrl-val { font-size: 0.80rem; color: var(--accent); min-width: 32px; text-align: right; }
+  .ctrl-range { width: 90px; accent-color: var(--accent); }
+  .ctrl-range-sm { width: 70px; }
+  .ctrl-num { width: 80px; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--text); font-size: 0.82rem; }
+  .cold-hint { font-size: 0.78rem; color: var(--warn); }
+  .ctrl-btns { display: flex; gap: 8px; margin-left: auto; }
+  .sim-btn { padding: 7px 18px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.88rem; transition: background .12s, box-shadow .12s; }
+  .sim-btn:hover { background: var(--panel-2); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .sim-btn-primary { background: var(--accent); color: #ffffff; border-color: var(--accent); font-weight: bold; }
+  .sim-btn-primary:hover { opacity: 0.85; }
+  .step-count { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+  canvas { display: block; max-width: 100%; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .stat-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+  .stat-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .stat-value { font-size: 1.15rem; font-weight: bold; }
+  .stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+  /* 初見者向けUI */
+  .intro-panel { border-left: 4px solid var(--accent); }
+  .intro-title { margin: 0; font-size: 0.95rem; color: var(--accent); font-weight: bold; }
+  .story-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+  .story-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-size: 0.87rem; line-height: 1.55; }
+  .story-num { display: inline-block; background: var(--accent); color: #ffffff; font-weight: bold; border-radius: 999px; width: 22px; height: 22px; text-align: center; line-height: 22px; margin-right: 6px; font-size: 0.8rem; }
+  .narration { border: 1px solid var(--border); border-left: 4px solid var(--warn); background: var(--panel-2); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.93rem; }
+  .nar-label { color: var(--warn); font-weight: bold; margin-right: 8px; font-size: 0.8rem; white-space: nowrap; }
+  .panel-sub { margin: 2px 0 10px; font-size: 0.8rem; color: var(--muted); line-height: 1.65; }
+  .legend-chips { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; font-size: 0.78rem; color: var(--muted); align-items: center; }
+  .chip-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  details.explain { margin-bottom: 16px; }
+  details.explain summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 10px 16px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
+  details.explain summary:hover { color: var(--text); }
+  details.explain[open] summary { border-radius: 12px 12px 0 0; }
+  .explain-body { background: var(--panel-2); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 12px 18px; font-size: 0.86rem; }
+  .explain-body li { margin-bottom: 6px; }
+  /* 初見UX 第2弾: プリセット・凡例グラデ・p値メーター */
+  .preset-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .preset-lead { font-size: 0.85rem; color: var(--muted); }
+  .preset-btn { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.86rem; transition: background .12s, border-color .12s, box-shadow .12s; }
+  .preset-btn:hover { background: var(--panel-2); border-color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .legend-title { color: var(--muted); }
+  .legend-item { display: inline-flex; align-items: center; gap: 3px; }
+  .legend-sep { display: inline-block; width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
+  .grad-bar { display: inline-block; width: 88px; height: 12px; border-radius: 3px; margin: 0 5px; vertical-align: -2px; border: 1px solid var(--border); background: linear-gradient(90deg, #dbeafe 0%, #93c5fd 45%, #2563eb 100%); }
+  /* p値メーター */
+  .stat-card-wide { grid-column: 1 / -1; }
+  .pmeter { margin: 8px 0 6px; }
+  .pmeter-track { position: relative; height: 16px; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(90deg, rgba(239,68,68,0.22) 0 5%, rgba(5,150,105,0.13) 5% 100%); }
+  .pmeter-track::before { content: ''; position: absolute; left: 5%; top: -2px; bottom: -2px; width: 2px; background: rgba(0,0,0,0.20); }
+  .pmeter-marker { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: #2563eb; box-shadow: 0 0 5px rgba(37,99,235,0.4); left: 50%; transition: left .25s ease, background .25s; }
+  .pmeter-scale { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+  .pmeter-scale .red { color: #ef4444; }
+  .pmeter-scale .green { color: var(--ok); }
+  /* 操作パネルのカテゴリ分け */
+  .ctrl-cats { display: flex; flex-wrap: wrap; gap: 12px; }
+  .ctrl-cat { flex: 1 1 250px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px 11px; }
+  .ctrl-cat-world { border-top: 2px solid #2563eb; }
+  .ctrl-cat-ai { border-top: 2px solid #d97706; }
+  .ctrl-cat-play { border-top: 2px solid #059669; }
+  .ctrl-cat-title { font-size: 0.79rem; font-weight: bold; color: var(--text); margin-bottom: 9px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .ctrl-cat-body { display: flex; flex-wrap: wrap; gap: 9px 14px; align-items: flex-start; }
+  .ctrl-cat-body .step-count { margin-left: 0; }
+  .ctrl-cat-hint { display: block; margin-top: 10px; font-size: 0.76rem; color: var(--warn); }
+  .ctrl-group-wrap { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl-hint-text { font-size: 0.72rem; color: var(--muted); line-height: 1.4; max-width: 200px; }
+  .ctrl-hint-text em { color: var(--ok); font-style: normal; font-weight: bold; }
+
+  /* ===== プロ品質コンポーネント（設計トークン統一・AI臭排除） ===== */
+  :root {
+    --r-sm: 8px;
+    --r-md: 10px;
+    --r-pill: 9999px;
+    --shadow-xs: 0 1px 2px rgba(16,24,40,.06);
+    --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --border-strong: #d0d5dd;
+  }
+  /* 基本操作バー */
+  .ctrl-essentials { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-xs); padding: 16px; }
+  .ctrl-essentials .ctrl-group { gap: 8px; }
+  .ctrl-essentials .ctrl-label { color: var(--text); font-weight: 500; }
+  .play-hint { width: 100%; margin: -4px 0 0; font-size: 0.8rem; color: var(--muted); }
+  /* ボタン（跳ねない・発光しない） */
+  .sim-btn { padding: 9px 18px; border-radius: var(--r-pill); border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.875rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+  .sim-btn:hover { background: var(--panel-2); border-color: var(--border-strong); box-shadow: none; }
+  .sim-btn:active { background: #f2f4f7; }
+  .sim-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
+  .sim-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: var(--shadow-xs); }
+  .sim-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; opacity: 1; }
+  .sim-btn-primary:active { background: #1e40af; border-color: #1e40af; }
+  .preset-btn { padding: 8px 16px; border-radius: var(--r-pill); border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.86rem; font-weight: 500; transition: background .15s ease, border-color .15s ease; }
+  .preset-btn:hover { background: var(--panel-2); border-color: var(--border-strong); box-shadow: none; }
+  .preset-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.2); }
+  /* レンジスライダー（自前つまみ・発光なし） */
+  .ctrl-range { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; cursor: pointer; }
+  .ctrl-range::-webkit-slider-runnable-track { height: 4px; border-radius: var(--r-pill); background: var(--border); }
+  .ctrl-range::-webkit-slider-thumb { -webkit-appearance: none; margin-top: -6px; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--border-strong); box-shadow: var(--shadow-xs); transition: border-color .15s ease; }
+  .ctrl-range:hover::-webkit-slider-thumb, .ctrl-range:active::-webkit-slider-thumb { border-color: var(--accent); }
+  .ctrl-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(37,99,235,.2); outline: none; }
+  .ctrl-range::-moz-range-track { height: 4px; border-radius: var(--r-pill); background: var(--border); }
+  .ctrl-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 1px solid var(--border-strong); box-shadow: var(--shadow-xs); }
+  .ctrl-range:hover::-moz-range-thumb, .ctrl-range:active::-moz-range-thumb { border-color: var(--accent); }
+  /* 数値入力 */
+  .ctrl-num { border-radius: var(--r-sm); border: 1px solid var(--border); padding: 6px 10px; font-variant-numeric: tabular-nums; transition: border-color .15s ease, box-shadow .15s ease; }
+  .ctrl-num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  .ctrl-val, .step-count, .stat-value { font-variant-numeric: tabular-nums; }
+  /* 詳しい設定アコーディオン */
+  details.ctrl-advanced { margin-top: 12px; }
+  details.ctrl-advanced > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 0.875rem; font-weight: 600; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: var(--r-md); transition: background .15s ease; }
+  details.ctrl-advanced > summary::-webkit-details-marker { display: none; }
+  details.ctrl-advanced > summary::before { content: "\25B8"; color: var(--muted); font-size: 0.8rem; }
+  details.ctrl-advanced[open] > summary::before { content: "\25BE"; }
+  details.ctrl-advanced > summary:hover { background: var(--panel-2); }
+  details.ctrl-advanced[open] > summary { border-radius: var(--r-md) var(--r-md) 0 0; background: var(--panel-2); }
+  .ctrl-advanced-body { background: #fff; border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--r-md) var(--r-md); padding: 16px; }
+  .ctrl-advanced-body .ctrl-cats { margin: 0; }
+  /* p値メーターの針: 色付きグロー撤去・中立影 */
+  .pmeter-marker { box-shadow: var(--shadow-xs); }
+  @media (prefers-reduced-motion: reduce) {
+    .sim-btn, .preset-btn, .ctrl-num, .ctrl-range::-webkit-slider-thumb { transition: none; }
+  }
 </style>
 </head>
 <body>
   <h1>迷信の誕生シミュレーション</h1>
-  <p class="sub">スキナーのハト「迷信行動」実験（1948）のAI版 — 報酬は行動と無関係なのに、なぜ迷信が生まれるのか</p>
+  <p class="sub">エサは完全ランダム。それでも AI は「必勝法」を信じ始める — スキナーのハト実験（1948）のAI版</p>
 
-  <div class="panel">
-    <span class="badge">PR③ 統計エンジン</span>
-    <p style="margin:10px 0 0">
-      乱数生成・エージェント・シミュレーションエンジンに加え、統計エンジン（不完全ガンマ関数・
-      カイ二乗検定・p値較正・一様性検定）を実装しました。描画UIは後続PRで追加します。
-      現時点の動作はブラウザのコンソール（スモークテスト出力）で確認できます。
-      詳細は <code>README.md</code> を参照してください。
-    </p>
+  <div class="panel intro-panel">
+    <p class="intro-title">📖 30秒でわかるこの実験</p>
+    <div class="story-grid">
+      <div class="story-card">
+        <span class="story-num">1</span><b>エサは完全ランダム</b><br>
+        エサ（報酬）は確率 30% のくじ引きで出ます。<b>AI が何をしても、この確率は一切変わりません。</b>
+      </div>
+      <div class="story-card">
+        <span class="story-num">2</span><b>それでも「迷信」が生まれる</b><br>
+        たまたま直後にエサが出た行動を「効いた！」と学習 → その行動ばかり選ぶ → ますます信じ込む…という悪循環。
+      </div>
+      <div class="story-card">
+        <span class="story-num">3</span><b>「思い込み」で差がつくか？</b><br>
+        <b style="color:var(--accent)">A班＝公平に学ぶAI</b> と
+        <b style="color:var(--warn)">B班＝当たりだけ強く覚えるAI</b>を比べ、思い込みが迷信を強めるかを観察します。
+      </div>
+    </div>
   </div>
 
-  <!-- 後続PRで各パネルを実装する。ここは配置のプレースホルダ。 -->
+  <!-- プリセット（見どころをワンクリック体験） -->
+  <div class="preset-row">
+    <span class="preset-lead">▶ まずは"見どころ"をワンクリック：</span>
+    <button class="preset-btn" data-preset="runaway">🔥 迷信が暴走する</button>
+    <button class="preset-btn" data-preset="vanish">🧊 迷信が消える（V0を上げる）</button>
+    <button class="preset-btn" data-preset="equal">⚖️ 思い込みを消す（A＝B）</button>
+    <button class="preset-btn" data-preset="default">🔄 標準設定に戻す</button>
+  </div>
+
+  <!-- コントロールパネル -->
+  <div class="panel ctrl-panel-outer">
+    <!-- 基本操作（常時表示） -->
+    <div class="ctrl-essentials">
+      <button class="sim-btn sim-btn-primary" id="btn-play">▶ 再生</button>
+      <button class="sim-btn" id="btn-reset">↺ リセット</button>
+      <div class="ctrl-group" title="各ステップでエサ（報酬）が出る確率。AIの行動とは無関係です">
+        <span class="ctrl-label">🎲 エサの確率 p</span>
+        <input type="range" id="ctrl-p" class="ctrl-range" min="0.05" max="0.95" step="0.05" value="0.3">
+        <span class="ctrl-val" id="val-p">0.30</span>
+      </div>
+      <div class="ctrl-group" title="B班のみ: 当たりを強く・外れを弱く覚える度合い（確証バイアス β）。0 にすると A班と完全に同じになります">
+        <span class="ctrl-label" style="color:var(--warn)">思い込み β（B班だけ）</span>
+        <input type="range" id="ctrl-beta" class="ctrl-range" min="0" max="1.0" step="0.05" value="0.50">
+        <span class="ctrl-val" id="val-beta">0.50</span>
+      </div>
+      <div class="ctrl-group" title="1秒あたりの実行ステップ数。小さいほどゆっくり観察できます">
+        <span class="ctrl-label">速度</span>
+        <input type="range" id="ctrl-speed" class="ctrl-range" min="1" max="300" step="1" value="20">
+        <span class="ctrl-val" id="val-speed">20</span>
+        <span class="ctrl-label">歩/秒</span>
+      </div>
+      <span class="step-count">経過 t = <span id="step-count">0</span></span>
+      <p class="play-hint" id="play-hint">▶ 再生 を押すと動き出します。</p>
+    </div>
+
+    <!-- 詳しい設定（折りたたみ） -->
+    <details class="ctrl-advanced">
+      <summary>⚙️ 詳しい設定（上級者向け）</summary>
+      <div class="ctrl-advanced-body">
+        <div class="ctrl-cats">
+          <!-- 世界のルール（環境） -->
+          <div class="ctrl-cat ctrl-cat-world">
+            <div class="ctrl-cat-title">🌍 世界のルール（選択肢と展開）</div>
+            <div class="ctrl-cat-body">
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="AIが試すおまじない（行動）の種類数">
+                  <span class="ctrl-label">おまじないの数 N＊</span>
+                  <input type="range" id="ctrl-N" class="ctrl-range ctrl-range-sm" min="2" max="10" step="1" value="5">
+                  <span class="ctrl-val" id="val-N">5</span>
+                </div>
+                <div class="ctrl-hint-text">種類が少ないほど迷信が<em>1つに集中</em>しやすい</div>
+              </div>
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="乱数の種。同じ番号なら毎回同じ展開を再現できます">
+                  <span class="ctrl-label">展開番号（同じ番号＝同じ展開）＊</span>
+                  <input type="number" id="ctrl-seed" class="ctrl-num" value="12345">
+                </div>
+                <button class="sim-btn" id="btn-newseed">🎲 別の展開で見る</button>
+                <div class="ctrl-hint-text">ボタンを押すと<em>違う偶然の展開</em>に。番号を固定すれば同じ展開を再現</div>
+              </div>
+            </div>
+          </div>
+          <!-- AIの性格（学び方） -->
+          <div class="ctrl-cat ctrl-cat-ai">
+            <div class="ctrl-cat-title">🧠 AI の性格（学び方のクセ）</div>
+            <div class="ctrl-cat-body">
+              <div class="ctrl-group" title="1回の結果をどれだけ強く覚えるか（学習率 α）">
+                <span class="ctrl-label">学習の速さ α</span>
+                <input type="range" id="ctrl-alpha" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+                <span class="ctrl-val" id="val-alpha">0.10</span>
+              </div>
+              <div class="ctrl-group" title="たまに別の行動を試してみる確率（探索率 ε）">
+                <span class="ctrl-label">気まぐれ度 ε</span>
+                <input type="range" id="ctrl-epsilon" class="ctrl-range" min="0.01" max="0.50" step="0.01" value="0.10">
+                <span class="ctrl-val" id="val-epsilon">0.10</span>
+              </div>
+              <div class="ctrl-group-wrap">
+                <div class="ctrl-group" title="全行動への期待の初期値。エサの確率 p より高くすると迷信が生まれにくくなります">
+                  <span class="ctrl-label">スタート時の期待（楽観度）＊</span>
+                  <input type="range" id="ctrl-V0" class="ctrl-range ctrl-range-sm" min="0" max="0.9" step="0.1" value="0.0">
+                  <span class="ctrl-val" id="val-V0">0.0</span>
+                </div>
+                <div class="ctrl-hint-text">0＝どれも効かないと疑ってスタート。<em>高いほど楽観的で迷信が生まれにくい</em>（🧊プリセットで確認）</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="ctrl-cat-hint">＊（おまじないの数・展開番号・スタート時の期待）の変更は ↺リセット後に反映されます</span>
+      </div>
+    </details>
+  </div>
+
+  <!-- ライブ解説 -->
+  <div class="narration">
+    <span class="nar-label">💡 いま起きていること</span><span id="narration-text">読み込み中…</span>
+  </div>
+
+  <!-- 母集団パネル -->
   <div class="panel" id="population-panel">
-    <h2 style="margin-top:0">母集団パネル（A10体・B10体）</h2>
-    <p class="todo">PR④以降で実装予定。</p>
+    <h2 style="margin-top:0">👀 20体の AI をライブ観察</h2>
+    <p class="panel-sub">
+      上段 <b style="color:var(--accent)">A班＝当たりも外れも公平に学ぶ</b>　／　下段 <b style="color:var(--warn)">B班＝当たりだけ強く覚える（思い込み β=<span id="lbl-beta">0.50</span>）</b><br>
+      タイルの<b>色</b>＝いちばん「効く」と信じている行動（＝その AI の"儀式"）　・　<b>明るいほど過信が強い＝迷信が強い</b>（🔒＝儀式に固執）　・　下端のミニバー＝各行動への期待の内訳
+    </p>
+    <div class="legend-chips" id="action-legend"></div>
+    <canvas id="population-canvas" width="1000" height="210"></canvas>
   </div>
+
+  <!-- 迷信の強さ 時系列 -->
+  <div class="panel">
+    <h2 style="margin-top:0">📈 「効く」と信じる強さの推移 — 現実（点線）をどれだけ超えて過信するか</h2>
+    <p class="panel-sub">
+      縦軸＝"お気に入りの行動が効く"と信じている強さ。<b>点線＝真の報酬確率 p（現実）</b>。線＝10体平均、うすい帯＝ばらつき。<br>
+      <b style="color:var(--warn)">黄色（B班）</b>の線が点線を大きく超えて上に行くほど「過信＝迷信」が強い。<b style="color:var(--accent)">青（A班）</b>は点線付近に張り付く＝現実どおりで迷信なし。この差が「思い込みが迷信を生む」証拠です。
+    </p>
+    <canvas id="timeseries-canvas" width="1000" height="220"></canvas>
+  </div>
+
+  <!-- 統計パネル -->
   <div class="panel" id="stats-panel">
-    <h2 style="margin-top:0">統計パネル</h2>
-    <p class="todo">PR④以降で実装予定。</p>
+    <h2 style="margin-top:0">🔢 いまの数字まとめ</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">A班の迷信の強さ＝過信度（平均・0〜1）</div>
+        <div class="stat-value" id="stat-concA" style="color:var(--accent)">—</div>
+        <div class="stat-sub" id="stat-concA-sub">公平に学ぶAI</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">B班の迷信の強さ＝過信度（平均・0〜1）</div>
+        <div class="stat-value" id="stat-concB" style="color:var(--warn)">—</div>
+        <div class="stat-sub" id="stat-concB-sub">当たりだけ覚えるAI</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">差 B − A ＝ 思い込みの効果</div>
+        <div class="stat-value" id="stat-diff">—</div>
+        <div class="stat-sub">プラスなら「思い込みが過信＝迷信を強めた」</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">エサが実際に出た割合</div>
+        <div class="stat-value" id="stat-rewRate">—</div>
+        <div class="stat-sub">設定とほぼ一致 ＝ 行動と無関係の証拠</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">経過ステップ</div>
+        <div class="stat-value" id="stat-steps">0</div>
+        <div class="stat-sub">20体それぞれが経験した試行回数</div>
+      </div>
+      <div class="stat-card stat-card-wide">
+        <div class="stat-label">🔍 統計チェック：エサは本当に「行動と無関係」？</div>
+        <div class="pmeter">
+          <div class="pmeter-track">
+            <div class="pmeter-marker" id="pmeter-marker"></div>
+          </div>
+          <div class="pmeter-scale">
+            <span class="red">← 関係あり？（赤・約5%幅）</span>
+            <span>境目 p=0.05</span>
+            <span class="green">無関係と整合的（緑）→</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-pval" style="font-size:0.92rem">—</div>
+        <div class="stat-sub">エサが行動と無関係なら、青い針は広い緑ゾーンをさまよいます。ごくまれ（約20回に1回）に赤へ触れるのは正常。単発の結果は「証明」ではなく整合性の確認です。</div>
+      </div>
+    </div>
   </div>
+
+  <!-- 詳しい仕組み（折りたたみ） -->
+  <details class="explain">
+    <summary>🔬 詳しい仕組みを見る — 数式・「恣意性を排する」設計（クリックで展開）</summary>
+    <div class="explain-body">
+      <ul style="margin:6px 0; padding-left:20px">
+        <li><b>A班の学習則（対称）</b>: <code>V[a] += α·(r − V[a])</code> — 当たりも外れも同じ重みで更新します。</li>
+        <li><b>B班の学習則（確証バイアス）</b>: 当たり時は <code>α·(1+β)</code>、外れ時は <code>α·(1−β)</code> の重みで更新。<b>β=0 にすると A班と数学的に完全一致</b>するため、A/B の差は純粋に β だけに帰属できます。</li>
+        <li><b>エサ生成は行動を参照できない構造</b>: 報酬関数 <code>createRewardStream(p, seed)</code> のスコープに行動変数は存在せず、毎ステップ必ず「エサ確定 → 行動選択」の順で実行されます（コード上で監査可能）。</li>
+        <li><b>「迷信の強さ」の定義＝過信度</b>: <code>(max(V) − p) / (1 − p)</code> を [0,1] に正規化。いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えて膨らんでいるか。0＝現実どおり（迷信なし）、1＝「絶対効く」と確信。A班は真の p に収束するため≈0、B班は確証バイアスで p を超えて膨張。<b>この「過信」が特定の行動を"儀式"に変えます。</b>（旧版の信念集中度＝Herfindahl は、B班が全行動を一律に過信すると逆に下がり中心命題を示せないため、副指標に降格しました。）</li>
+        <li><b>行動の選び方は両班共通</b>（ε-greedy）: 違いは学習則だけ。統計チェックの p 値は単発では「証明」にならないため、「無関係と整合的」とだけ表現します。</li>
+      </ul>
+      <p style="margin:6px 0 0">
+        <span class="badge">開発状況: PR④ 描画コア＋UI</span>　詳細・監査ノートは <code>README.md</code> を参照してください。
+      </p>
+    </div>
+  </details>
 
 <script>
 "use strict";
 (function () {
+  // ===== Light-theme canvas palette =====
+  var C = {
+    tileBg:      '#f0f4ff',
+    tileLine:    '#e0e7ff',
+    tileText:    'rgba(17,24,39,0.88)',
+    tileTextFix: '#92400e',
+    barTrack:    '#e5e7eb',
+    gaugeBg:     'rgba(229,231,235,0.85)',
+    fixBorder:   '#d97706',
+    gridLine:    '#e5e7eb',
+    axisLine:    '#d1d5db',
+    axisLabel:   '#6b7280',
+    refLine:     'rgba(17,24,39,0.30)',
+    refLabel:    'rgba(17,24,39,0.65)',
+    legendText:  '#111827',
+    seriesALine: '#2563eb',
+    seriesABand: 'rgba(37,99,235,0.07)',
+    seriesBLine: '#d97706',
+    seriesBBand: 'rgba(217,119,6,0.10)',
+    emptyText:   '#9ca3af',
+  };
+
   // ===================================================================
   // 迷信の誕生シミュレーション — 単一ファイル実装
   //   ・外部依存なし / ビルド不要 / file:// 直開き対応（module不使用）
@@ -392,13 +722,54 @@
     return h;
   }
 
-  /** meanBeliefConcentration: 集団（sim配列）の平均信念集中度。 */
+  /** meanBeliefConcentration: 集団（sim配列）の平均信念集中度（副指標）。 */
   function meanBeliefConcentration(sims) {
     if (sims.length === 0) return 0;
     let s = 0;
     for (let i = 0; i < sims.length; i++) {
       s += beliefConcentrationHerfindahl(sims[i].agent.V);
     }
+    return s / sims.length;
+  }
+
+  /**
+   * 迷信の強さ＝過信度（over-belief）。中心指標。
+   * いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えているかを
+   * [0,1] に正規化する:  overBelief = clamp( (max(V) − p) / (1 − p), 0, 1 )。
+   *   0 = 真の確率どおり（迷信なし）、1 = 「絶対効く」と確信（最大の迷信）。
+   * A班（対称更新）は真の p に収束するため ≈0、B班（確証バイアス）は p を超えて膨張し ≫0。
+   * 「過信が特定の行動を儀式に変える」——この指標がその過信の強さを測る。
+   * @param {number[]|Float64Array} V 価値ベクトル
+   * @param {number} p 真の報酬確率
+   */
+  function overBelief(V, p) {
+    let mx = V[0];
+    for (let i = 1; i < V.length; i++) if (V[i] > mx) mx = V[i];
+    if (p >= 1) return 0;
+    const ob = (mx - p) / (1 - p);
+    return ob < 0 ? 0 : (ob > 1 ? 1 : ob);
+  }
+
+  /** maxBelief: いちばん信じている行動の生の期待値（時系列で真の p と比較するため）。 */
+  function maxBelief(V) {
+    let mx = V[0];
+    for (let i = 1; i < V.length; i++) if (V[i] > mx) mx = V[i];
+    return mx;
+  }
+
+  /** meanOverBelief: 集団の平均過信度。 */
+  function meanOverBelief(sims, p) {
+    if (sims.length === 0) return 0;
+    let s = 0;
+    for (let i = 0; i < sims.length; i++) s += overBelief(sims[i].agent.V, p);
+    return s / sims.length;
+  }
+
+  /** meanMaxBelief: 集団の平均 max(V)（いちばん信じている行動の期待値の平均）。 */
+  function meanMaxBelief(sims) {
+    if (sims.length === 0) return 0;
+    let s = 0;
+    for (let i = 0; i < sims.length; i++) s += maxBelief(sims[i].agent.V);
     return s / sims.length;
   }
 
@@ -593,8 +964,551 @@
     return pValues;
   }
 
-  // ===== SECTION: Rendering（PR④で実装） ============================
-  // Canvas 自作チャート（母集団パネル・平均±帯・ヒストグラム）…
+  // ===== SECTION: Rendering（PR④）=====================================
+  // Canvas 自作チャート（母集団パネル・信念集中度時系列）。rAF でスロットル描画。
+
+  // --- グローバル UI 状態 ---
+  var gPop     = null;   // 現在の Population
+  var gPlaying = false;  // 再生中フラグ
+  var gAnimId  = null;   // requestAnimationFrame ハンドル
+  var gHistA   = [];     // { t, mean, lo, hi }[] — A集団の信念集中度履歴
+  var gHistB   = [];     // 同 B集団
+  var HIST_MAX = 300;    // 保持する履歴点数上限
+  var gFrameN  = 0;      // rAF フレームカウンタ
+  var gRenderSkip = 2;   // N フレームに1回描画（≈30fps で 60fps rAF）
+
+  var ACT_COLORS = [
+    '#2563eb','#059669','#d97706','#dc2626','#7c3aed',
+    '#0891b2','#ea580c','#9333ea','#475569','#16a34a',
+  ];
+  // 行動の表示名（初見者向け: 丸数字で統一）
+  var ACT_NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+  // 行動の"おまじない"名（スキナーのハトの迷信行動にちなむ、意味のないしぐさ）。
+  // どれもエサの出やすさとは無関係＝「効くと信じるのは迷信」という核心を具体化する。
+  var ACT_NAMES = ['右回り','左回り','おじぎ','ジャンプ','足ぶみ','上向き','首ふり','けんけん','ゆらゆら','さけぶ'];
+  var ACT_ICONS = ['🔄','🔁','🙇','🦘','👣','👆','🙆','🦶','🌊','📢'];
+  function actName(i) { return ACT_NAMES[i] || ('行動' + (i + 1)); }
+
+  // 迷信の強さ（0〜1）→ ゲージ色（弱い黄 → 強い橙）
+  function mistColor(c) {
+    c = Math.max(0, Math.min(1, c));
+    var hue = (48 - 28 * c).toFixed(0);   // 48(黄) → 20(橙)
+    var light = (58 - 22 * c).toFixed(0); // 58% → 36% (白背景で視認できる濃さ)
+    return 'hsl(' + hue + ',90%,' + light + '%)';
+  }
+
+  // 凡例（HTML）を N に合わせて生成: ①色＝信じている行動 ②明るさ/ゲージ＝迷信の強さ
+  function buildActionLegend() {
+    var el = document.getElementById('action-legend');
+    if (!el || !gPop) return;
+    var N = gPop.config.N;
+    var html = '<span class="legend-title">行動＝AIが試す"おまじない"（どれもエサとは無関係＝意味なし）:</span>';
+    for (var i = 0; i < N; i++) {
+      html += '<span class="legend-item"><span class="chip-swatch" style="background:' +
+        ACT_COLORS[i % ACT_COLORS.length] + '"></span>' + (ACT_ICONS[i] || '') + actName(i) + '</span>';
+    }
+    html += '<span class="legend-sep"></span>';
+    html += '<span class="legend-title">明るさ・ゲージ＝過信度（真のpを超えて信じ込む強さ）:</span>' +
+            '<span class="legend-item">弱<span class="grad-bar"></span>強</span>';
+    el.innerHTML = html;
+  }
+
+  // 線形スケール関数
+  function scaleLinear(d0, d1, r0, r1) {
+    return function (v) { return r0 + (v - d0) / (d1 - d0) * (r1 - r0); };
+  }
+
+  function dominantAction(V) {
+    var best = 0;
+    for (var i = 1; i < V.length; i++) if (V[i] > V[best]) best = i;
+    return best;
+  }
+
+  // --- 母集団パネル描画 ---
+  function drawPopulationPanel(canvas, pop) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var M = pop.A.length;
+    var bandH = 20;              // 各行上部の班ラベル帯
+    var rowH  = H / 2;
+    var tw = W / M, mg = 2;
+
+    var ROW_META = {
+      A: { label: 'A班：当たりも外れも公平に学ぶ', color: '#2563eb', band: 'rgba(37,99,235,0.06)' },
+      B: { label: 'B班：当たりだけ強く覚える（思い込みあり）', color: '#d97706', band: 'rgba(217,119,6,0.07)' },
+    };
+
+    ['A', 'B'].forEach(function (kind, row) {
+      var rowY = row * rowH;
+
+      // 班ラベル帯
+      ctx.fillStyle = ROW_META[kind].band;
+      ctx.fillRect(0, rowY, W, bandH);
+      ctx.fillStyle = ROW_META[kind].color;
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(ROW_META[kind].label, 6, rowY + 15);
+
+      pop[kind].forEach(function (sim, col) {
+        var x = col * tw + mg, y = rowY + bandH + mg;
+        var iw = tw - mg * 2, ih = rowH - bandH - mg * 2;
+        var ob   = overBelief(sim.agent.V, pop.config.p); // 迷信の強さ＝過信度
+        var dom  = dominantAction(sim.agent.V);
+        var fixated = ob >= 0.5;   // 儀式を強い確信で握った（過信が固着）個体
+
+        // 背景: 暗い（過信なし＝真の確率どおり）→ 行動色が鮮やか（過信が強い＝迷信）。
+        var bright = 0.18 + 0.82 * ob;
+        ctx.fillStyle = C.tileBg;
+        ctx.fillRect(x, y, iw, ih);
+        ctx.globalAlpha = bright;
+        ctx.fillStyle = ACT_COLORS[dom % ACT_COLORS.length];
+        ctx.fillRect(x, y, iw, ih);
+        ctx.globalAlpha = 1;
+
+        // 価値バー（ミニ）: 下 5px を全行動バーに使う
+        var N = sim.agent.V.length;
+        var bw = (iw - 4) / N;
+        var maxV = 0;
+        for (var ai = 0; ai < N; ai++) if (sim.agent.V[ai] > maxV) maxV = sim.agent.V[ai];
+        for (var ai = 0; ai < N; ai++) {
+          var bx = x + 2 + ai * bw;
+          var by = y + ih - 6;
+          ctx.fillStyle = C.barTrack;
+          ctx.fillRect(bx, by, bw - 1, 5);
+          var frac = maxV > 0 ? sim.agent.V[ai] / maxV : 0;
+          ctx.fillStyle = ACT_COLORS[ai % ACT_COLORS.length];
+          ctx.fillRect(bx, by, Math.max(0, frac * (bw - 1)), 5);
+        }
+
+        // テキスト（明るいタイルでも読めるよう影付き）
+        ctx.shadowColor = 'rgba(0,0,0,0.12)';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = C.tileText;
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(kind + (col + 1), x + 4, y + 14);
+        ctx.font = '10px sans-serif';
+        ctx.fillText(actName(dom) + 'を信じる', x + 4, y + 27);
+        ctx.shadowBlur = 0;
+
+        // 過信ゲージ（横バー）: 明るさの意味を明示的な数値バーで二重符号化
+        var gx = x + 4, gy = y + 34, gw = iw - 8, gh = 5;
+        ctx.fillStyle = C.gaugeBg;
+        ctx.fillRect(gx, gy, gw, gh);
+        ctx.fillStyle = mistColor(ob);
+        ctx.fillRect(gx, gy, gw * ob, gh);
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 1;
+        ctx.fillStyle = fixated ? C.tileTextFix : C.tileText;
+        ctx.font = (fixated ? 'bold ' : '') + '9px sans-serif';
+        ctx.fillText('過信 ' + ob.toFixed(2) + (fixated ? ' 🔒' : ''), gx, gy + 15);
+        ctx.shadowBlur = 0;
+
+        // 固着した個体は金枠で強調
+        if (fixated) {
+          ctx.strokeStyle = C.fixBorder;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 1, y + 1, iw - 2, ih - 2);
+        }
+      });
+    });
+  }
+
+  // --- 履歴記録 ---
+  function recordHistory(pop) {
+    function stats(arr) {
+      var lo = arr[0], hi = arr[0], sum = 0;
+      for (var i = 0; i < arr.length; i++) {
+        sum += arr[i];
+        if (arr[i] < lo) lo = arr[i];
+        if (arr[i] > hi) hi = arr[i];
+      }
+      return { t: pop.t, mean: sum / arr.length, lo: lo, hi: hi };
+    }
+    // 「いちばん信じている行動の期待値 max(V)」を記録（時系列で真の p と比較）
+    var cA = pop.A.map(function (s) { return maxBelief(s.agent.V); });
+    var cB = pop.B.map(function (s) { return maxBelief(s.agent.V); });
+    gHistA.push(stats(cA));
+    gHistB.push(stats(cB));
+    if (gHistA.length > HIST_MAX) { gHistA.shift(); gHistB.shift(); }
+  }
+
+  // --- 時系列チャート描画 ---
+  function drawTimeSeriesChart(canvas) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (gHistA.length < 2) {
+      ctx.fillStyle = C.emptyText;
+      ctx.font = '13px sans-serif';
+      ctx.fillText('▶ 再生 を押すとグラフが伸びていきます', 24, H / 2 + 5);
+      return;
+    }
+
+    var pad = { t: 16, r: 20, b: 30, l: 40 };
+    var pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+    var N = gHistA.length;
+    var scX = scaleLinear(0, N - 1, pad.l, pad.l + pw);
+    var scY = scaleLinear(0, 1, pad.t + ph, pad.t);
+
+    // グリッド
+    ctx.setLineDash([3, 4]);
+    ctx.lineWidth = 1;
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      var gy = scY(v);
+      ctx.strokeStyle = C.gridLine;
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(2), pad.l - 4, gy + 3);
+    });
+    ctx.setLineDash([]);
+    ctx.textAlign = 'left';
+
+    // 真の報酬確率 p の基準線（点線）: この線を超えた分が「過信＝迷信」
+    if (gPop) {
+      var py = scY(gPop.config.p);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = C.refLine;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = C.refLabel; ctx.font = '10px sans-serif';
+      ctx.fillText('真の確率 p=' + gPop.config.p.toFixed(2) + '（現実）', pad.l + pw - 150, py - 5);
+    }
+
+    // 系列
+    [
+      { hist: gHistA, band: C.seriesABand, line: C.seriesALine },
+      { hist: gHistB, band: C.seriesBBand, line: C.seriesBLine },
+    ].forEach(function (s) {
+      var h = s.hist;
+      if (h.length < 2) return;
+      // バンド (lo〜hi)
+      ctx.beginPath();
+      ctx.moveTo(scX(0), scY(h[0].lo));
+      for (var i = 1; i < h.length; i++) ctx.lineTo(scX(i), scY(h[i].lo));
+      for (var i = h.length - 1; i >= 0; i--) ctx.lineTo(scX(i), scY(h[i].hi));
+      ctx.closePath();
+      ctx.fillStyle = s.band; ctx.fill();
+      // 平均線
+      ctx.beginPath();
+      ctx.moveTo(scX(0), scY(h[0].mean));
+      for (var i = 1; i < h.length; i++) ctx.lineTo(scX(i), scY(h[i].mean));
+      ctx.strokeStyle = s.line; ctx.lineWidth = 2; ctx.stroke();
+    });
+
+    // 軸
+    ctx.strokeStyle = C.axisLine; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph);
+    ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
+
+    // Y 軸タイトル
+    ctx.save();
+    ctx.translate(10, pad.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('「効く」と信じる強さ', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
+
+    // X 軸 t 表示
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
+    ctx.fillText('経過 t=' + gHistA[gHistA.length - 1].t.toLocaleString(), pad.l + pw - 90, H - 4);
+
+    // 凡例
+    var lx = pad.l + 8, ly = pad.t + 6;
+    var lastA = gHistA[gHistA.length - 1], lastB = gHistB[gHistB.length - 1];
+    [
+      [C.seriesALine, 'A班（公平に学ぶ）', lastA ? lastA.mean : 0],
+      [C.seriesBLine, 'B班（当たりだけ覚える）', lastB ? lastB.mean : 0],
+    ].forEach(function (e, i) {
+      ctx.fillStyle = e[0]; ctx.fillRect(lx, ly + i * 15, 14, 3);
+      ctx.fillStyle = C.legendText; ctx.font = '11px sans-serif';
+      ctx.fillText(e[1] + '  ' + e[2].toFixed(3), lx + 18, ly + i * 15 + 8);
+    });
+  }
+
+  // --- 統計パネル更新 ---
+  function updateStatsPanel() {
+    if (!gPop) return;
+    var p = gPop.config.p, pPct = Math.round(p * 100);
+    var obA = meanOverBelief(gPop.A, p);   // 迷信の強さ＝過信度
+    var obB = meanOverBelief(gPop.B, p);
+    var diff = obB - obA;
+    var mvA = meanMaxBelief(gPop.A);        // 生の期待値（真の p と比較）
+    var mvB = meanMaxBelief(gPop.B);
+    var totR = 0, totT = 0;
+    gPop.A.concat(gPop.B).forEach(function (s) { totR += s.cumReward; totT += s.t; });
+    var rewRate = totT > 0 ? totR / totT : 0;
+
+    var ge = function (id) { return document.getElementById(id); };
+    if (ge('stat-concA')) ge('stat-concA').textContent = obA.toFixed(3);
+    if (ge('stat-concB')) ge('stat-concB').textContent = obB.toFixed(3);
+    if (ge('stat-concA-sub')) ge('stat-concA-sub').textContent = '"効く"行動を平均 ' + Math.round(mvA * 100) + '% と評価（真は ' + pPct + '%）';
+    if (ge('stat-concB-sub')) ge('stat-concB-sub').textContent = '"効く"行動を平均 ' + Math.round(mvB * 100) + '% と評価（真は ' + pPct + '%）';
+    if (ge('stat-diff')) {
+      ge('stat-diff').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3);
+      ge('stat-diff').style.color = diff > 0.03 ? 'var(--warn)' : diff < -0.03 ? 'var(--ok)' : 'var(--muted)';
+    }
+    if (ge('stat-rewRate'))
+      ge('stat-rewRate').textContent = (rewRate * 100).toFixed(1) + '%（設定 ' + pPct + '%）';
+    if (ge('stat-steps'))  ge('stat-steps').textContent  = (gPop.t || 0).toLocaleString();
+    if (ge('step-count'))  ge('step-count').textContent  = (gPop.t || 0).toLocaleString();
+    if (ge('lbl-beta') && gPop.B.length > 0) ge('lbl-beta').textContent = gPop.B[0].beta.toFixed(2);
+
+    // 独立性検定（A[0]、参考表示）＋ p値メーター
+    if (gPop.A.length > 0) {
+      var tbl = buildContingencyTable(gPop.A[0].agent);
+      var tr  = chiSquareIndependenceTest(tbl);
+      var pEl = ge('stat-pval');
+      var mk  = ge('pmeter-marker');
+      if (pEl) {
+        if (isNaN(tr.p)) {
+          pEl.textContent = 'まだデータ不足（各行動が数回ずつ選ばれると計算できます）';
+          pEl.style.color = 'var(--muted)';
+          if (mk) { mk.style.left = '50%'; mk.style.background = '#fff'; }
+        } else {
+          var pos = Math.max(1, Math.min(99, tr.p * 100));
+          if (mk) { mk.style.left = pos + '%'; mk.style.background = tr.p < 0.05 ? '#ef4444' : '#2563eb'; }
+          pEl.style.color = '';
+          pEl.innerHTML = tr.p < 0.05
+            ? '<b style="color:var(--warn)">p=' + tr.p.toFixed(3) + '</b> ⚠ 今回はたまたま赤（無関係でも約20回に1回は起こります）'
+            : '<b style="color:var(--ok)">p=' + tr.p.toFixed(3) + '</b> ✓ 無関係と整合的';
+        }
+      }
+    }
+
+    updateNarration(obA, obB, diff, rewRate, mvA, mvB);
+  }
+
+  // --- ライブ解説文（初見者向けのいちばんの道しるべ） ---
+  function updateNarration(obA, obB, diff, rewRate, mvA, mvB) {
+    var el = document.getElementById('narration-text');
+    if (!el || !gPop) return;
+    var t = gPop.t || 0;
+    var beta = gPop.B.length > 0 ? gPop.B[0].beta : 0;
+    var pPct = Math.round(gPop.config.p * 100);
+    var msg;
+
+    if (t === 0) {
+      msg = 'エサは確率 ' + pPct + '% の完全ランダム。AI が何をしてもこの確率は変わりません。それでも「効く行動がある」と信じ込むでしょうか？ ▶ 再生 ボタンを押して観察を始めましょう。';
+    } else if (beta === 0) {
+      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（過信度の差はほぼ 0）。両班とも"お気に入り"を真の ' + pPct + '% 前後で正しく評価 ＝ 迷信は生まれません。β を上げると B班だけが過信し始めます。';
+    } else {
+      msg = 'エサはランダムに出ています（実測 ' + (rewRate * 100).toFixed(1) + '% ≒ 設定 ' + pPct + '%、行動とは無関係）。';
+      if (diff > 0.03) {
+        msg += 'それでも B班は"お気に入りの行動"を平均 ' + Math.round(mvB * 100) + '% 効くと過信（真は ' + pPct +
+               '%）。一方 A班は ' + Math.round(mvA * 100) + '% でほぼ正確。「当たりだけ覚える」思い込みが、根拠のない"儀式（迷信）"を生んでいます。';
+      } else if (diff < -0.03) {
+        msg += 'いまは偶然のゆらぎで A班の過信が B班を上回っています。再生を続けると B班の過信が真の ' + pPct + '% を超えて育っていきます。';
+      } else {
+        msg += 'いまのところ両班の過信度は近い水準です。再生を続けると、B班の"お気に入り"への評価が真の ' + pPct + '% を超えて膨らんでいきます。';
+      }
+    }
+    el.textContent = msg;
+  }
+
+  // --- 設定の読み取り ---
+  function readHotConfig() {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      p:       parseFloat(g('ctrl-p').value),
+      alpha:   parseFloat(g('ctrl-alpha').value),
+      epsilon: parseFloat(g('ctrl-epsilon').value),
+      beta:    parseFloat(g('ctrl-beta').value),
+    };
+  }
+
+  function readColdConfig() {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      N:    parseInt(g('ctrl-N').value)    || 5,
+      V0:   parseFloat(g('ctrl-V0').value),
+      seed: parseInt(g('ctrl-seed').value) || 12345,
+      M:    10,
+    };
+  }
+
+  // α, ε, β をシム全体へ即時反映
+  function applyHotParams() {
+    if (!gPop) return;
+    var hot = readHotConfig();
+    ['A', 'B'].forEach(function (kind) {
+      gPop[kind].forEach(function (sim) {
+        sim.alpha   = hot.alpha;
+        sim.epsilon = hot.epsilon;
+        if (kind === 'B') sim.beta = hot.beta;
+      });
+    });
+  }
+
+  // p を変更: 報酬ストリームのみ再構築（エージェント状態は保持）
+  function applyHotP(newP) {
+    if (!gPop) return;
+    gPop.config.p = newP;
+    ['A', 'B'].forEach(function (kind) {
+      gPop[kind].forEach(function (sim) {
+        sim.p = newP;
+        var seed = deriveSeed(gPop.config.seed, 'reward', sim.personaIndex);
+        sim.rewardStream = createRewardStream(newP, seed);
+      });
+    });
+    gHistA = []; gHistB = []; // p 変更で文脈が変わるため履歴クリア
+  }
+
+  // フルリセット
+  function resetSim() {
+    var hot  = readHotConfig();
+    var cold = readColdConfig();
+    gPop = createPopulation({
+      N: cold.N, p: hot.p, alpha: hot.alpha, epsilon: hot.epsilon,
+      beta: hot.beta, V0: cold.V0, seed: cold.seed, M: cold.M,
+    });
+    gHistA = []; gHistB = [];
+    gFrameN = 0;
+    recordHistory(gPop);
+    buildActionLegend();
+    renderAll();
+  }
+
+  // 全キャンバスを描画
+  function renderAll() {
+    var pc = document.getElementById('population-canvas');
+    var tc = document.getElementById('timeseries-canvas');
+    if (gPop && pc) drawPopulationPanel(pc, gPop);
+    if (tc) drawTimeSeriesChart(tc);
+    updateStatsPanel();
+  }
+
+  // rAF ループ（時間ベース: ディスプレイの Hz に依存しない「ステップ/秒」実行）
+  var gLastTick  = 0;  // 前フレームの timestamp（ms）
+  var gStepCarry = 0;  // 端数ステップの繰り越し
+
+  function tick(ts) {
+    if (!gPlaying) return;
+    if (!gLastTick) gLastTick = ts;
+    var dt = Math.min((ts - gLastTick) / 1000, 0.25); // タブ復帰時の一括実行を防ぐ
+    gLastTick = ts;
+
+    var rate = parseInt(document.getElementById('ctrl-speed').value) || 30; // ステップ/秒
+    gStepCarry += dt * rate;
+    var steps = Math.floor(gStepCarry);
+    gStepCarry -= steps;
+
+    for (var i = 0; i < steps; i++) if (gPop) stepPopulation(gPop);
+    if (gPop && steps > 0) recordHistory(gPop);
+    gFrameN++;
+    if (gFrameN % gRenderSkip === 0) renderAll();
+    gAnimId = requestAnimationFrame(tick);
+  }
+
+  function setPlaying(v) {
+    gPlaying = v;
+    var btn = document.getElementById('btn-play');
+    if (btn) btn.textContent = v ? '⏸ 一時停止' : '▶ 再生';
+    var ph = document.getElementById('play-hint');
+    if (ph) ph.style.display = v ? 'none' : '';
+    if (v) {
+      gLastTick = 0; gStepCarry = 0; // 一時停止中の経過時間を持ち越さない
+      gAnimId = requestAnimationFrame(tick);
+    } else {
+      if (gAnimId) { cancelAnimationFrame(gAnimId); gAnimId = null; }
+    }
+  }
+
+  // コントロールの接続
+  function wireControls() {
+    var rangeBindings = [
+      ['ctrl-p',       'val-p',       function (v) { return (+v).toFixed(2); }],
+      ['ctrl-alpha',   'val-alpha',   function (v) { return (+v).toFixed(2); }],
+      ['ctrl-epsilon', 'val-epsilon', function (v) { return (+v).toFixed(2); }],
+      ['ctrl-beta',    'val-beta',    function (v) { return (+v).toFixed(2); }],
+      ['ctrl-V0',      'val-V0',      function (v) { return (+v).toFixed(1); }],
+      ['ctrl-N',       'val-N',       function (v) { return +v; }],
+      ['ctrl-speed',   'val-speed',   function (v) { return +v; }],
+    ];
+    rangeBindings.forEach(function (b) {
+      var el = document.getElementById(b[0]);
+      var vl = document.getElementById(b[1]);
+      if (el && vl) el.addEventListener('input', function () { vl.textContent = b[2](el.value); });
+    });
+
+    // ホット: α, ε, β → 即時反映
+    ['ctrl-alpha', 'ctrl-epsilon', 'ctrl-beta'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', applyHotParams);
+    });
+
+    // ホット: p → 報酬ストリーム再構築
+    var pEl = document.getElementById('ctrl-p');
+    if (pEl) pEl.addEventListener('input', function () { applyHotP(parseFloat(pEl.value)); });
+
+    // 再生/一時停止
+    var playBtn = document.getElementById('btn-play');
+    if (playBtn) playBtn.addEventListener('click', function () { setPlaying(!gPlaying); });
+
+    // リセット
+    var resetBtn = document.getElementById('btn-reset');
+    if (resetBtn) resetBtn.addEventListener('click', function () { setPlaying(false); resetSim(); });
+
+    // 🎲 別の展開（新しい展開番号でリセットし、そのまま再生開始）
+    var newSeedBtn = document.getElementById('btn-newseed');
+    if (newSeedBtn) newSeedBtn.addEventListener('click', function () {
+      var seedEl = document.getElementById('ctrl-seed');
+      if (seedEl) seedEl.value = Math.floor(Math.random() * 100000);
+      setPlaying(false);
+      resetSim();
+      setPlaying(true);
+    });
+
+    // プリセット（見どころワンクリック）
+    var presetBtns = document.querySelectorAll('.preset-btn');
+    for (var i = 0; i < presetBtns.length; i++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { applyPreset(btn.getAttribute('data-preset')); });
+      })(presetBtns[i]);
+    }
+  }
+
+  // --- プリセット定義（初見者向けに「見どころ」を即再現） ---
+  var PRESETS = {
+    // 強い思い込み → B班が真の30%を80%超まで過信し、儀式に固執
+    runaway: { p: 0.3, alpha: 0.12, epsilon: 0.05, beta: 0.9, V0: 0.0, N: 5, seed: 12345, speed: 80 },
+    // 楽観的な初期期待（V0 > p）→ 迷信が生まれにくい／消える
+    vanish:  { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.5, V0: 0.6, N: 5, seed: 12345, speed: 80 },
+    // β=0 → B班が A班と数学的に一致（差が消える）
+    equal:   { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.0, V0: 0.0, N: 5, seed: 12345, speed: 40 },
+    // 既定値に戻す
+    default: { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.5, V0: 0.0, N: 5, seed: 12345, speed: 30 },
+  };
+
+  // スライダー値をセットして input を発火（val 表示も更新される）
+  function setCtrl(id, v) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = v;
+    el.dispatchEvent(new Event('input'));
+  }
+
+  function applyPreset(name) {
+    var pr = PRESETS[name];
+    if (!pr) return;
+    setCtrl('ctrl-p', pr.p);
+    setCtrl('ctrl-alpha', pr.alpha);
+    setCtrl('ctrl-epsilon', pr.epsilon);
+    setCtrl('ctrl-beta', pr.beta);
+    setCtrl('ctrl-V0', pr.V0);
+    setCtrl('ctrl-N', pr.N);
+    setCtrl('ctrl-speed', pr.speed);
+    var seedEl = document.getElementById('ctrl-seed');
+    if (seedEl) seedEl.value = pr.seed;
+    setPlaying(false);
+    resetSim();      // コールド値（V0/N/seed）を反映して作り直し
+    setPlaying(true);
+  }
 
   // ===== SECTION: Personas（PR⑥で実装） =============================
 
@@ -626,7 +1540,7 @@
       deriveSeed(12345, "action:B", 0)
     );
 
-    // (3) 集団を走らせ A/B の平均信念集中度を比較
+    // (3) 集団を走らせ A/B の平均過信度（中心指標）を比較
     const config = {
       N: 5, p: 0.3, alpha: 0.1, V0: 0.0, epsilon: 0.1, beta: 0.5,
       seed: 12345, M: 10,
@@ -634,11 +1548,15 @@
     const pop = createPopulation(config);
     const T = 3000;
     for (let t = 0; t < T; t++) stepPopulation(pop);
-    const concA = meanBeliefConcentration(pop.A);
-    const concB = meanBeliefConcentration(pop.B);
+    const obA = meanOverBelief(pop.A, config.p);
+    const obB = meanOverBelief(pop.B, config.p);
     console.log(
-      "[smoke] T=%d 平均信念集中度: A=%s B=%s (β=%s → B>A を期待)",
-      T, concA.toFixed(3), concB.toFixed(3), config.beta
+      "[smoke] T=%d 平均過信度: A=%s B=%s (β=%s → B≫A を期待)",
+      T, obA.toFixed(3), obB.toFixed(3), config.beta
+    );
+    console.log(
+      "[smoke] （参考）平均信念集中度[副指標]: A=%s B=%s",
+      meanBeliefConcentration(pop.A).toFixed(3), meanBeliefConcentration(pop.B).toFixed(3)
     );
 
     // (4) β=0 で B≡A（同一ペルソナ・同一報酬列で価値が完全一致）
@@ -717,6 +1635,9 @@
 
   function init() {
     smokeTest();
+    wireControls();
+    resetSim();
+    // 初見者向け: 自動再生はせず ▶ 再生 を押してから開始（手動スタート）
   }
 
   if (document.readyState === "loading") {
@@ -748,6 +1669,10 @@
     beliefConcentrationHerfindahl: beliefConcentrationHerfindahl,
     shannonEntropy: shannonEntropy,
     meanBeliefConcentration: meanBeliefConcentration,
+    overBelief: overBelief,
+    maxBelief: maxBelief,
+    meanOverBelief: meanOverBelief,
+    meanMaxBelief: meanMaxBelief,
     // 統計エンジン（PR③）
     erf: erf,
     stdNormalCDF: stdNormalCDF,
