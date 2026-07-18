@@ -95,6 +95,24 @@
   details.explain[open] summary { border-radius: 12px 12px 0 0; }
   .explain-body { background: var(--panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 12px 18px; font-size: 0.86rem; }
   .explain-body li { margin-bottom: 6px; }
+  /* 初見UX 第2弾: プリセット・凡例グラデ・p値メーター */
+  .preset-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .preset-lead { font-size: 0.85rem; color: var(--muted); }
+  .preset-btn { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 0.86rem; transition: background .12s, border-color .12s; }
+  .preset-btn:hover { background: var(--border); border-color: var(--accent); }
+  .legend-title { color: var(--muted); }
+  .legend-item { display: inline-flex; align-items: center; gap: 3px; }
+  .legend-sep { display: inline-block; width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
+  .grad-bar { display: inline-block; width: 88px; height: 12px; border-radius: 3px; margin: 0 5px; vertical-align: -2px; border: 1px solid var(--border); background: linear-gradient(90deg, #131720 0%, #33507e 45%, #6ea8fe 100%); }
+  /* p値メーター */
+  .stat-card-wide { grid-column: 1 / -1; }
+  .pmeter { margin: 8px 0 6px; }
+  .pmeter-track { position: relative; height: 16px; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(90deg, rgba(224,87,76,0.60) 0 5%, rgba(89,212,153,0.24) 5% 100%); }
+  .pmeter-track::before { content: ''; position: absolute; left: 5%; top: -2px; bottom: -2px; width: 2px; background: rgba(255,255,255,0.45); }
+  .pmeter-marker { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 5px rgba(0,0,0,0.7); left: 50%; transition: left .25s ease, background .25s; }
+  .pmeter-scale { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+  .pmeter-scale .red { color: #e0796f; }
+  .pmeter-scale .green { color: var(--ok); }
 </style>
 </head>
 <body>
@@ -118,6 +136,15 @@
         <b style="color:var(--warn)">B班＝当たりだけ強く覚えるAI</b>を比べ、思い込みが迷信を強めるかを観察します。
       </div>
     </div>
+  </div>
+
+  <!-- プリセット（見どころをワンクリック体験） -->
+  <div class="preset-row">
+    <span class="preset-lead">▶ まずは“見どころ”をワンクリック：</span>
+    <button class="preset-btn" data-preset="runaway">🔥 迷信が暴走する</button>
+    <button class="preset-btn" data-preset="vanish">🧊 迷信が消える（V0を上げる）</button>
+    <button class="preset-btn" data-preset="equal">⚖️ 思い込みを消す（A＝B）</button>
+    <button class="preset-btn" data-preset="default">🔄 標準設定に戻す</button>
   </div>
 
   <!-- コントロールパネル -->
@@ -184,7 +211,7 @@
     <h2 style="margin-top:0">👀 20体の AI をライブ観察</h2>
     <p class="panel-sub">
       上段 <b style="color:var(--accent)">A班＝当たりも外れも公平に学ぶ</b>　／　下段 <b style="color:var(--warn)">B班＝当たりだけ強く覚える（思い込み β=<span id="lbl-beta">0.50</span>）</b><br>
-      タイルの<b>色</b>＝その AI がいちばん「効く」と信じている行動　・　<b>明るいほど信じ込みが強い＝迷信が強い</b>　・　下端のミニバー＝各行動への期待の内訳
+      タイルの<b>色</b>＝いちばん「効く」と信じている行動（＝その AI の“儀式”）　・　<b>明るいほど過信が強い＝迷信が強い</b>（🔒＝儀式に固執）　・　下端のミニバー＝各行動への期待の内訳
     </p>
     <div class="legend-chips" id="action-legend"></div>
     <canvas id="population-canvas" width="1000" height="210"></canvas>
@@ -192,11 +219,10 @@
 
   <!-- 迷信の強さ 時系列 -->
   <div class="panel">
-    <h2 style="margin-top:0">📈 迷信の強さの推移 — 思い込み（B班）は迷信を強めるか？</h2>
+    <h2 style="margin-top:0">📈 「効く」と信じる強さの推移 — 現実（点線）をどれだけ超えて過信するか</h2>
     <p class="panel-sub">
-      線＝10体の平均、うすい帯＝10体のばらつき（最小〜最大）。
-      <b style="color:var(--warn)">黄色（B班）</b>の線が<b style="color:var(--accent)">青（A班）</b>より上にあるほど「思い込みが迷信を強めた」ことを示します。
-      ※「迷信の強さ」＝信念集中度（0〜1。期待が1つの行動に集中するほど 1 に近づく）
+      縦軸＝“お気に入りの行動が効く”と信じている強さ。<b>点線＝真の報酬確率 p（現実）</b>。線＝10体平均、うすい帯＝ばらつき。<br>
+      <b style="color:var(--warn)">黄色（B班）</b>の線が点線を大きく超えて上に行くほど「過信＝迷信」が強い。<b style="color:var(--accent)">青（A班）</b>は点線付近に張り付く＝現実どおりで迷信なし。この差が「思い込みが迷信を生む」証拠です。
     </p>
     <canvas id="timeseries-canvas" width="1000" height="220"></canvas>
   </div>
@@ -206,19 +232,19 @@
     <h2 style="margin-top:0">🔢 いまの数字まとめ</h2>
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">A班の迷信の強さ（平均）</div>
+        <div class="stat-label">A班の迷信の強さ＝過信度（平均・0〜1）</div>
         <div class="stat-value" id="stat-concA" style="color:var(--accent)">—</div>
-        <div class="stat-sub">公平に学ぶAI・0〜1</div>
+        <div class="stat-sub" id="stat-concA-sub">公平に学ぶAI</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">B班の迷信の強さ（平均）</div>
+        <div class="stat-label">B班の迷信の強さ＝過信度（平均・0〜1）</div>
         <div class="stat-value" id="stat-concB" style="color:var(--warn)">—</div>
-        <div class="stat-sub">当たりだけ覚えるAI・0〜1</div>
+        <div class="stat-sub" id="stat-concB-sub">当たりだけ覚えるAI</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">差 B − A ＝ 思い込みの効果</div>
         <div class="stat-value" id="stat-diff">—</div>
-        <div class="stat-sub">プラスなら「思い込みが迷信を強めた」</div>
+        <div class="stat-sub">プラスなら「思い込みが過信＝迷信を強めた」</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">エサが実際に出た割合</div>
@@ -230,10 +256,20 @@
         <div class="stat-value" id="stat-steps">0</div>
         <div class="stat-sub">20体それぞれが経験した試行回数</div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">統計チェック：行動とエサは無関係か</div>
-        <div class="stat-value" id="stat-pval" style="font-size:0.85rem">—</div>
-        <div class="stat-sub">p値（参考）。「証明」ではなく「無関係と整合的」の確認</div>
+      <div class="stat-card stat-card-wide">
+        <div class="stat-label">🔍 統計チェック：エサは本当に「行動と無関係」？</div>
+        <div class="pmeter">
+          <div class="pmeter-track">
+            <div class="pmeter-marker" id="pmeter-marker"></div>
+          </div>
+          <div class="pmeter-scale">
+            <span class="red">← 関係あり？（赤・約5%幅）</span>
+            <span>境目 p=0.05</span>
+            <span class="green">無関係と整合的（緑）→</span>
+          </div>
+        </div>
+        <div class="stat-value" id="stat-pval" style="font-size:0.92rem">—</div>
+        <div class="stat-sub">エサが行動と無関係なら、白い針は広い緑ゾーンをさまよいます。ごくまれ（約20回に1回）に赤へ触れるのは正常。単発の結果は「証明」ではなく整合性の確認です。</div>
       </div>
     </div>
   </div>
@@ -246,7 +282,7 @@
         <li><b>A班の学習則（対称）</b>: <code>V[a] += α·(r − V[a])</code> — 当たりも外れも同じ重みで更新します。</li>
         <li><b>B班の学習則（確証バイアス）</b>: 当たり時は <code>α·(1+β)</code>、外れ時は <code>α·(1−β)</code> の重みで更新。<b>β=0 にすると A班と数学的に完全一致</b>するため、A/B の差は純粋に β だけに帰属できます。</li>
         <li><b>エサ生成は行動を参照できない構造</b>: 報酬関数 <code>createRewardStream(p, seed)</code> のスコープに行動変数は存在せず、毎ステップ必ず「エサ確定 → 行動選択」の順で実行されます（コード上で監査可能）。</li>
-        <li><b>「迷信の強さ」の定義</b>: 信念集中度（正規化 Herfindahl 指数）。期待値ベクトルが1つの行動に集中しているほど 1、全行動に均等なら 0。</li>
+        <li><b>「迷信の強さ」の定義＝過信度</b>: <code>(max(V) − p) / (1 − p)</code> を [0,1] に正規化。いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えて膨らんでいるか。0＝現実どおり（迷信なし）、1＝「絶対効く」と確信。A班は真の p に収束するため≈0、B班は確証バイアスで p を超えて膨張。<b>この「過信」が特定の行動を“儀式”に変えます。</b>（旧版の信念集中度＝Herfindahl は、B班が全行動を一律に過信すると逆に下がり中心命題を示せないため、副指標に降格しました。）</li>
         <li><b>行動の選び方は両班共通</b>（ε-greedy）: 違いは学習則だけ。統計チェックの p 値は単発では「証明」にならないため、「無関係と整合的」とだけ表現します。</li>
       </ul>
       <p style="margin:6px 0 0">
@@ -566,13 +602,54 @@
     return h;
   }
 
-  /** meanBeliefConcentration: 集団（sim配列）の平均信念集中度。 */
+  /** meanBeliefConcentration: 集団（sim配列）の平均信念集中度（副指標）。 */
   function meanBeliefConcentration(sims) {
     if (sims.length === 0) return 0;
     let s = 0;
     for (let i = 0; i < sims.length; i++) {
       s += beliefConcentrationHerfindahl(sims[i].agent.V);
     }
+    return s / sims.length;
+  }
+
+  /**
+   * 迷信の強さ＝過信度（over-belief）。中心指標。
+   * いちばん信じている行動（＝儀式）の期待値が、真の報酬率 p をどれだけ超えているかを
+   * [0,1] に正規化する:  overBelief = clamp( (max(V) − p) / (1 − p), 0, 1 )。
+   *   0 = 真の確率どおり（迷信なし）、1 = 「絶対効く」と確信（最大の迷信）。
+   * A班（対称更新）は真の p に収束するため ≈0、B班（確証バイアス）は p を超えて膨張し ≫0。
+   * 「過信が特定の行動を儀式に変える」——この指標がその過信の強さを測る。
+   * @param {number[]|Float64Array} V 価値ベクトル
+   * @param {number} p 真の報酬確率
+   */
+  function overBelief(V, p) {
+    let mx = V[0];
+    for (let i = 1; i < V.length; i++) if (V[i] > mx) mx = V[i];
+    if (p >= 1) return 0;
+    const ob = (mx - p) / (1 - p);
+    return ob < 0 ? 0 : (ob > 1 ? 1 : ob);
+  }
+
+  /** maxBelief: いちばん信じている行動の生の期待値（時系列で真の p と比較するため）。 */
+  function maxBelief(V) {
+    let mx = V[0];
+    for (let i = 1; i < V.length; i++) if (V[i] > mx) mx = V[i];
+    return mx;
+  }
+
+  /** meanOverBelief: 集団の平均過信度。 */
+  function meanOverBelief(sims, p) {
+    if (sims.length === 0) return 0;
+    let s = 0;
+    for (let i = 0; i < sims.length; i++) s += overBelief(sims[i].agent.V, p);
+    return s / sims.length;
+  }
+
+  /** meanMaxBelief: 集団の平均 max(V)（いちばん信じている行動の期待値の平均）。 */
+  function meanMaxBelief(sims) {
+    if (sims.length === 0) return 0;
+    let s = 0;
+    for (let i = 0; i < sims.length; i++) s += maxBelief(sims[i].agent.V);
     return s / sims.length;
   }
 
@@ -787,16 +864,27 @@
   // 行動の表示名（初見者向け: 丸数字で統一）
   var ACT_NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
 
-  // 行動色の凡例（HTML）を N に合わせて生成
+  // 迷信の強さ（0〜1）→ ゲージ色（弱い黄 → 強い橙）
+  function mistColor(c) {
+    c = Math.max(0, Math.min(1, c));
+    var hue = (48 - 30 * c).toFixed(0);   // 48(黄) → 18(橙)
+    var light = (72 - 24 * c).toFixed(0); // 72% → 48%
+    return 'hsl(' + hue + ',92%,' + light + '%)';
+  }
+
+  // 凡例（HTML）を N に合わせて生成: ①色＝信じている行動 ②明るさ/ゲージ＝迷信の強さ
   function buildActionLegend() {
     var el = document.getElementById('action-legend');
     if (!el || !gPop) return;
     var N = gPop.config.N;
-    var html = '<span>行動の色（どれもエサの出やすさは同じ）:</span>';
+    var html = '<span class="legend-title">色＝信じている行動（どれもエサの出やすさは同じ）:</span>';
     for (var i = 0; i < N; i++) {
-      html += '<span><span class="chip-swatch" style="background:' +
-        ACT_COLORS[i % ACT_COLORS.length] + '"></span>行動' + (ACT_NUM[i] || (i + 1)) + '</span>';
+      html += '<span class="legend-item"><span class="chip-swatch" style="background:' +
+        ACT_COLORS[i % ACT_COLORS.length] + '"></span>' + (ACT_NUM[i] || (i + 1)) + '</span>';
     }
+    html += '<span class="legend-sep"></span>';
+    html += '<span class="legend-title">明るさ・ゲージ＝過信度（真のpを超えて信じ込む強さ）:</span>' +
+            '<span class="legend-item">弱<span class="grad-bar"></span>強</span>';
     el.innerHTML = html;
   }
 
@@ -840,13 +928,15 @@
       pop[kind].forEach(function (sim, col) {
         var x = col * tw + mg, y = rowY + bandH + mg;
         var iw = tw - mg * 2, ih = rowH - bandH - mg * 2;
-        var conc = beliefConcentrationHerfindahl(sim.agent.V);
+        var ob   = overBelief(sim.agent.V, pop.config.p); // 迷信の強さ＝過信度
         var dom  = dominantAction(sim.agent.V);
+        var fixated = ob >= 0.5;   // 儀式を強い確信で握った（過信が固着）個体
 
-        // 背景: 暗い（迷信なし）→ 明るい（迷信強）
-        ctx.fillStyle = '#131720';
+        // 背景: 暗い（過信なし＝真の確率どおり）→ 行動色が鮮やか（過信が強い＝迷信）。
+        var bright = 0.18 + 0.82 * ob;
+        ctx.fillStyle = '#0e121b';
         ctx.fillRect(x, y, iw, ih);
-        ctx.globalAlpha = 0.12 + 0.88 * conc;
+        ctx.globalAlpha = bright;
         ctx.fillStyle = ACT_COLORS[dom % ACT_COLORS.length];
         ctx.fillRect(x, y, iw, ih);
         ctx.globalAlpha = 1;
@@ -867,15 +957,34 @@
         }
 
         // テキスト（明るいタイルでも読めるよう影付き）
-        ctx.shadowColor = 'rgba(0,0,0,0.65)';
+        ctx.shadowColor = 'rgba(0,0,0,0.75)';
         ctx.shadowBlur = 3;
-        ctx.fillStyle = 'rgba(240,243,250,0.95)';
+        ctx.fillStyle = 'rgba(245,247,252,0.97)';
         ctx.font = 'bold 11px sans-serif';
         ctx.fillText(kind + (col + 1), x + 4, y + 14);
         ctx.font = '10px sans-serif';
-        ctx.fillText((ACT_NUM[dom] || dom + 1) + ' を信じる', x + 4, y + 28);
-        ctx.fillText('迷信 ' + conc.toFixed(2), x + 4, y + 41);
+        ctx.fillText((ACT_NUM[dom] || dom + 1) + ' を信じる', x + 4, y + 27);
         ctx.shadowBlur = 0;
+
+        // 過信ゲージ（横バー）: 明るさの意味を明示的な数値バーで二重符号化
+        var gx = x + 4, gy = y + 34, gw = iw - 8, gh = 5;
+        ctx.fillStyle = 'rgba(18,22,32,0.85)';
+        ctx.fillRect(gx, gy, gw, gh);
+        ctx.fillStyle = mistColor(ob);
+        ctx.fillRect(gx, gy, gw * ob, gh);
+        ctx.shadowColor = 'rgba(0,0,0,0.75)';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = fixated ? 'rgba(255,209,102,0.98)' : 'rgba(224,228,238,0.9)';
+        ctx.font = (fixated ? 'bold ' : '') + '9px sans-serif';
+        ctx.fillText('過信 ' + ob.toFixed(2) + (fixated ? ' 🔒' : ''), gx, gy + 15);
+        ctx.shadowBlur = 0;
+
+        // 固着した個体は金枠で強調
+        if (fixated) {
+          ctx.strokeStyle = 'rgba(255,209,102,0.9)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 1, y + 1, iw - 2, ih - 2);
+        }
       });
     });
   }
@@ -891,8 +1000,9 @@
       }
       return { t: pop.t, mean: sum / arr.length, lo: lo, hi: hi };
     }
-    var cA = pop.A.map(function (s) { return beliefConcentrationHerfindahl(s.agent.V); });
-    var cB = pop.B.map(function (s) { return beliefConcentrationHerfindahl(s.agent.V); });
+    // 「いちばん信じている行動の期待値 max(V)」を記録（時系列で真の p と比較）
+    var cA = pop.A.map(function (s) { return maxBelief(s.agent.V); });
+    var cB = pop.B.map(function (s) { return maxBelief(s.agent.V); });
     gHistA.push(stats(cA));
     gHistB.push(stats(cB));
     if (gHistA.length > HIST_MAX) { gHistA.shift(); gHistB.shift(); }
@@ -931,6 +1041,18 @@
     ctx.setLineDash([]);
     ctx.textAlign = 'left';
 
+    // 真の報酬確率 p の基準線（点線）: この線を超えた分が「過信＝迷信」
+    if (gPop) {
+      var py = scY(gPop.config.p);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(230,234,242,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(230,234,242,0.85)'; ctx.font = '10px sans-serif';
+      ctx.fillText('真の確率 p=' + gPop.config.p.toFixed(2) + '（現実）', pad.l + pw - 150, py - 5);
+    }
+
     // 系列
     [
       { hist: gHistA, band: 'rgba(110,168,254,0.12)', line: '#6ea8fe' },
@@ -963,7 +1085,7 @@
     ctx.translate(10, pad.t + ph / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center'; ctx.fillText('迷信の強さ', 0, 0);
+    ctx.textAlign = 'center'; ctx.fillText('「効く」と信じる強さ', 0, 0);
     ctx.restore();
     ctx.textAlign = 'left';
 
@@ -987,47 +1109,58 @@
   // --- 統計パネル更新 ---
   function updateStatsPanel() {
     if (!gPop) return;
-    var concA = meanBeliefConcentration(gPop.A);
-    var concB = meanBeliefConcentration(gPop.B);
-    var diff  = concB - concA;
+    var p = gPop.config.p, pPct = Math.round(p * 100);
+    var obA = meanOverBelief(gPop.A, p);   // 迷信の強さ＝過信度
+    var obB = meanOverBelief(gPop.B, p);
+    var diff = obB - obA;
+    var mvA = meanMaxBelief(gPop.A);        // 生の期待値（真の p と比較）
+    var mvB = meanMaxBelief(gPop.B);
     var totR = 0, totT = 0;
     gPop.A.concat(gPop.B).forEach(function (s) { totR += s.cumReward; totT += s.t; });
     var rewRate = totT > 0 ? totR / totT : 0;
 
     var ge = function (id) { return document.getElementById(id); };
-    if (ge('stat-concA')) ge('stat-concA').textContent = concA.toFixed(3);
-    if (ge('stat-concB')) ge('stat-concB').textContent = concB.toFixed(3);
+    if (ge('stat-concA')) ge('stat-concA').textContent = obA.toFixed(3);
+    if (ge('stat-concB')) ge('stat-concB').textContent = obB.toFixed(3);
+    if (ge('stat-concA-sub')) ge('stat-concA-sub').textContent = '“効く”行動を平均 ' + Math.round(mvA * 100) + '% と評価（真は ' + pPct + '%）';
+    if (ge('stat-concB-sub')) ge('stat-concB-sub').textContent = '“効く”行動を平均 ' + Math.round(mvB * 100) + '% と評価（真は ' + pPct + '%）';
     if (ge('stat-diff')) {
       ge('stat-diff').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(3);
-      ge('stat-diff').style.color = diff > 0.02 ? 'var(--warn)' : diff < -0.02 ? 'var(--ok)' : 'var(--muted)';
+      ge('stat-diff').style.color = diff > 0.03 ? 'var(--warn)' : diff < -0.03 ? 'var(--ok)' : 'var(--muted)';
     }
     if (ge('stat-rewRate'))
-      ge('stat-rewRate').textContent = (rewRate * 100).toFixed(1) + '%（設定 ' + Math.round(gPop.config.p * 100) + '%）';
+      ge('stat-rewRate').textContent = (rewRate * 100).toFixed(1) + '%（設定 ' + pPct + '%）';
     if (ge('stat-steps'))  ge('stat-steps').textContent  = (gPop.t || 0).toLocaleString();
     if (ge('step-count'))  ge('step-count').textContent  = (gPop.t || 0).toLocaleString();
     if (ge('lbl-beta') && gPop.B.length > 0) ge('lbl-beta').textContent = gPop.B[0].beta.toFixed(2);
 
-    // 独立性検定（A[0]、参考表示）
+    // 独立性検定（A[0]、参考表示）＋ p値メーター
     if (gPop.A.length > 0) {
       var tbl = buildContingencyTable(gPop.A[0].agent);
       var tr  = chiSquareIndependenceTest(tbl);
       var pEl = ge('stat-pval');
+      var mk  = ge('pmeter-marker');
       if (pEl) {
         if (isNaN(tr.p)) {
-          pEl.textContent = 'N/A（まだデータ不足）';
+          pEl.textContent = 'まだデータ不足（各行動が数回ずつ選ばれると計算できます）';
           pEl.style.color = 'var(--muted)';
+          if (mk) { mk.style.left = '50%'; mk.style.background = '#fff'; }
         } else {
-          pEl.textContent = 'p=' + tr.p.toFixed(4) + (tr.p < 0.05 ? '  ⚠ たまたま有意（約5%で起こる）' : '  ✓ 無関係と整合的');
-          pEl.style.color = tr.p < 0.05 ? 'var(--warn)' : 'var(--ok)';
+          var pos = Math.max(1, Math.min(99, tr.p * 100));
+          if (mk) { mk.style.left = pos + '%'; mk.style.background = tr.p < 0.05 ? '#e0574c' : '#ffffff'; }
+          pEl.style.color = '';
+          pEl.innerHTML = tr.p < 0.05
+            ? '<b style="color:var(--warn)">p=' + tr.p.toFixed(3) + '</b> ⚠ 今回はたまたま赤（無関係でも約20回に1回は起こります）'
+            : '<b style="color:var(--ok)">p=' + tr.p.toFixed(3) + '</b> ✓ 無関係と整合的';
         }
       }
     }
 
-    updateNarration(concA, concB, diff, rewRate);
+    updateNarration(obA, obB, diff, rewRate, mvA, mvB);
   }
 
   // --- ライブ解説文（初見者向けのいちばんの道しるべ） ---
-  function updateNarration(concA, concB, diff, rewRate) {
+  function updateNarration(obA, obB, diff, rewRate, mvA, mvB) {
     var el = document.getElementById('narration-text');
     if (!el || !gPop) return;
     var t = gPop.t || 0;
@@ -1036,20 +1169,18 @@
     var msg;
 
     if (t === 0) {
-      msg = 'エサは確率 ' + pPct + '% の完全ランダム。それでも AI は「必勝法」を信じ始めるでしょうか？ まもなく自動でスタートします。';
+      msg = 'エサは確率 ' + pPct + '% の完全ランダム。AI が何をしてもこの確率は変わりません。それでも「効く行動がある」と信じ込むでしょうか？ まもなく自動でスタートします。';
     } else if (beta === 0) {
-      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（差はほぼ 0 のはず）。βスライダーを上げると差が生まれる様子を観察できます。';
+      msg = '思い込み β=0 のため、B班は A班とまったく同じ学び方をします（過信度の差はほぼ 0）。両班とも“お気に入り”を真の ' + pPct + '% 前後で正しく評価 ＝ 迷信は生まれません。β を上げると B班だけが過信し始めます。';
     } else {
-      msg = 'エサはランダムに出ています（実測 ' + (rewRate * 100).toFixed(1) + '% ≒ 設定 ' + pPct + '%）。';
-      if (diff > 0.02) {
-        var ratio = concA > 0.01 ? concB / concA : Infinity;
-        var comp = (isFinite(ratio) && ratio >= 1.15) ? 'の約' + ratio.toFixed(1) + '倍' : 'を上回る水準';
-        msg += 'それでも B班の迷信の強さ ' + concB.toFixed(2) + ' は A班 ' + concA.toFixed(2) + ' ' + comp +
-               ' — 「当たりだけ覚える」思い込みが、根拠のない迷信を強めています。';
-      } else if (diff < -0.02) {
-        msg += 'いまは A班の迷信が B班を上回っています。長く回すと「気まぐれ（ε）」の探索で迷信は薄れていきます — 迷信が生まれる瞬間を見るには ↺ リセットしてください。';
+      msg = 'エサはランダムに出ています（実測 ' + (rewRate * 100).toFixed(1) + '% ≒ 設定 ' + pPct + '%、行動とは無関係）。';
+      if (diff > 0.03) {
+        msg += 'それでも B班は“お気に入りの行動”を平均 ' + Math.round(mvB * 100) + '% 効くと過信（真は ' + pPct +
+               '%）。一方 A班は ' + Math.round(mvA * 100) + '% でほぼ正確。「当たりだけ覚える」思い込みが、根拠のない“儀式（迷信）”を生んでいます。';
+      } else if (diff < -0.03) {
+        msg += 'いまは偶然のゆらぎで A班の過信が B班を上回っています。再生を続けると B班の過信が真の ' + pPct + '% を超えて育っていきます。';
       } else {
-        msg += 'いまのところ A班と B班の差はわずかです。序盤〜中盤（t≦3000あたり）で思い込みの効果が数字に表れやすくなります。';
+        msg += 'いまのところ両班の過信度は近い水準です。再生を続けると、B班の“お気に入り”への評価が真の ' + pPct + '% を超えて膨らんでいきます。';
       }
     }
     el.textContent = msg;
@@ -1195,6 +1326,51 @@
     // リセット
     var resetBtn = document.getElementById('btn-reset');
     if (resetBtn) resetBtn.addEventListener('click', function () { setPlaying(false); resetSim(); });
+
+    // プリセット（見どころワンクリック）
+    var presetBtns = document.querySelectorAll('.preset-btn');
+    for (var i = 0; i < presetBtns.length; i++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { applyPreset(btn.getAttribute('data-preset')); });
+      })(presetBtns[i]);
+    }
+  }
+
+  // --- プリセット定義（初見者向けに「見どころ」を即再現） ---
+  var PRESETS = {
+    // 強い思い込み → B班が真の30%を80%超まで過信し、儀式に固執
+    runaway: { p: 0.3, alpha: 0.12, epsilon: 0.05, beta: 0.9, V0: 0.0, N: 5, seed: 12345, speed: 80 },
+    // 楽観的な初期期待（V0 > p）→ 迷信が生まれにくい／消える
+    vanish:  { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.5, V0: 0.6, N: 5, seed: 12345, speed: 80 },
+    // β=0 → B班が A班と数学的に一致（差が消える）
+    equal:   { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.0, V0: 0.0, N: 5, seed: 12345, speed: 40 },
+    // 既定値に戻す
+    default: { p: 0.3, alpha: 0.10, epsilon: 0.10, beta: 0.5, V0: 0.0, N: 5, seed: 12345, speed: 30 },
+  };
+
+  // スライダー値をセットして input を発火（val 表示も更新される）
+  function setCtrl(id, v) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = v;
+    el.dispatchEvent(new Event('input'));
+  }
+
+  function applyPreset(name) {
+    var pr = PRESETS[name];
+    if (!pr) return;
+    setCtrl('ctrl-p', pr.p);
+    setCtrl('ctrl-alpha', pr.alpha);
+    setCtrl('ctrl-epsilon', pr.epsilon);
+    setCtrl('ctrl-beta', pr.beta);
+    setCtrl('ctrl-V0', pr.V0);
+    setCtrl('ctrl-N', pr.N);
+    setCtrl('ctrl-speed', pr.speed);
+    var seedEl = document.getElementById('ctrl-seed');
+    if (seedEl) seedEl.value = pr.seed;
+    setPlaying(false);
+    resetSim();      // コールド値（V0/N/seed）を反映して作り直し
+    setPlaying(true);
   }
 
   // ===== SECTION: Personas（PR⑥で実装） =============================
@@ -1227,7 +1403,7 @@
       deriveSeed(12345, "action:B", 0)
     );
 
-    // (3) 集団を走らせ A/B の平均信念集中度を比較
+    // (3) 集団を走らせ A/B の平均過信度（中心指標）を比較
     const config = {
       N: 5, p: 0.3, alpha: 0.1, V0: 0.0, epsilon: 0.1, beta: 0.5,
       seed: 12345, M: 10,
@@ -1235,11 +1411,15 @@
     const pop = createPopulation(config);
     const T = 3000;
     for (let t = 0; t < T; t++) stepPopulation(pop);
-    const concA = meanBeliefConcentration(pop.A);
-    const concB = meanBeliefConcentration(pop.B);
+    const obA = meanOverBelief(pop.A, config.p);
+    const obB = meanOverBelief(pop.B, config.p);
     console.log(
-      "[smoke] T=%d 平均信念集中度: A=%s B=%s (β=%s → B>A を期待)",
-      T, concA.toFixed(3), concB.toFixed(3), config.beta
+      "[smoke] T=%d 平均過信度: A=%s B=%s (β=%s → B≫A を期待)",
+      T, obA.toFixed(3), obB.toFixed(3), config.beta
+    );
+    console.log(
+      "[smoke] （参考）平均信念集中度[副指標]: A=%s B=%s",
+      meanBeliefConcentration(pop.A).toFixed(3), meanBeliefConcentration(pop.B).toFixed(3)
     );
 
     // (4) β=0 で B≡A（同一ペルソナ・同一報酬列で価値が完全一致）
@@ -1353,6 +1533,10 @@
     beliefConcentrationHerfindahl: beliefConcentrationHerfindahl,
     shannonEntropy: shannonEntropy,
     meanBeliefConcentration: meanBeliefConcentration,
+    overBelief: overBelief,
+    maxBelief: maxBelief,
+    meanOverBelief: meanOverBelief,
+    meanMaxBelief: meanMaxBelief,
     // 統計エンジン（PR③）
     erf: erf,
     stdNormalCDF: stdNormalCDF,
