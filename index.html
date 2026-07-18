@@ -6,16 +6,15 @@
 <title>迷信の誕生シミュレーション（スキナーのハト実験のAI版）</title>
 <style>
   :root {
-    color-scheme: light dark;
-    --bg: #0f1117;
-    --panel: #171a23;
-    --panel-2: #1e222e;
-    --border: #2a2f3d;
-    --text: #e6e8ee;
-    --muted: #9aa3b2;
-    --accent: #6ea8fe;
-    --ok: #59d499;
-    --warn: #e0b84c;
+    --bg:      #ffffff;
+    --panel:   #ffffff;
+    --panel-2: #f9fafb;
+    --border:  #e5e7eb;
+    --text:    #111827;
+    --muted:   #6b7280;
+    --accent:  #2563eb;
+    --ok:      #059669;
+    --warn:    #d97706;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -24,19 +23,20 @@
     color: var(--text);
     font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
     line-height: 1.6;
-    padding: 24px;
-    max-width: 1100px;
+    padding: 40px 28px;
+    max-width: 1200px;
     margin: 0 auto;
   }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  h2 { font-size: 1.05rem; margin: 24px 0 8px; color: var(--accent); }
+  h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 1.05rem; font-weight: 700; margin: 24px 0 8px; color: var(--text); }
   .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 18px;
-    margin-bottom: 16px;
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
   }
   .badge {
     display: inline-block;
@@ -64,17 +64,17 @@
   .ctrl-val { font-size: 0.80rem; color: var(--accent); min-width: 32px; text-align: right; }
   .ctrl-range { width: 90px; accent-color: var(--accent); }
   .ctrl-range-sm { width: 70px; }
-  .ctrl-num { width: 80px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--text); font-size: 0.82rem; }
+  .ctrl-num { width: 80px; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--text); font-size: 0.82rem; }
   .cold-hint { font-size: 0.78rem; color: var(--warn); }
   .ctrl-btns { display: flex; gap: 8px; margin-left: auto; }
-  .sim-btn { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 0.88rem; }
-  .sim-btn:hover { background: var(--border); }
-  .sim-btn-primary { background: var(--accent); color: #0a0e1a; border-color: var(--accent); font-weight: bold; }
+  .sim-btn { padding: 7px 18px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.88rem; transition: background .12s, box-shadow .12s; }
+  .sim-btn:hover { background: var(--panel-2); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .sim-btn-primary { background: var(--accent); color: #ffffff; border-color: var(--accent); font-weight: bold; }
   .sim-btn-primary:hover { opacity: 0.85; }
   .step-count { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
   canvas { display: block; max-width: 100%; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .stat-card { background: var(--panel-2); border-radius: 8px; padding: 10px 14px; }
+  .stat-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
   .stat-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
   .stat-value { font-size: 1.15rem; font-weight: bold; }
   .stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
@@ -82,50 +82,50 @@
   .intro-panel { border-left: 4px solid var(--accent); }
   .intro-title { margin: 0; font-size: 0.95rem; color: var(--accent); font-weight: bold; }
   .story-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
-  .story-card { background: var(--panel-2); border-radius: 10px; padding: 12px 14px; font-size: 0.87rem; line-height: 1.55; }
-  .story-num { display: inline-block; background: var(--accent); color: #0a0e1a; font-weight: bold; border-radius: 999px; width: 22px; height: 22px; text-align: center; line-height: 22px; margin-right: 6px; font-size: 0.8rem; }
-  .narration { border: 1px solid var(--border); border-left: 4px solid var(--warn); background: var(--panel); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.93rem; }
+  .story-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-size: 0.87rem; line-height: 1.55; }
+  .story-num { display: inline-block; background: var(--accent); color: #ffffff; font-weight: bold; border-radius: 999px; width: 22px; height: 22px; text-align: center; line-height: 22px; margin-right: 6px; font-size: 0.8rem; }
+  .narration { border: 1px solid var(--border); border-left: 4px solid var(--warn); background: var(--panel-2); border-radius: 12px; padding: 10px 16px; margin-bottom: 16px; font-size: 0.93rem; }
   .nar-label { color: var(--warn); font-weight: bold; margin-right: 8px; font-size: 0.8rem; white-space: nowrap; }
   .panel-sub { margin: 2px 0 10px; font-size: 0.8rem; color: var(--muted); line-height: 1.65; }
   .legend-chips { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; font-size: 0.78rem; color: var(--muted); align-items: center; }
   .chip-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
   details.explain { margin-bottom: 16px; }
-  details.explain summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 10px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+  details.explain summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 10px 16px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
   details.explain summary:hover { color: var(--text); }
   details.explain[open] summary { border-radius: 12px 12px 0 0; }
-  .explain-body { background: var(--panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 12px 18px; font-size: 0.86rem; }
+  .explain-body { background: var(--panel-2); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 12px 18px; font-size: 0.86rem; }
   .explain-body li { margin-bottom: 6px; }
   /* 初見UX 第2弾: プリセット・凡例グラデ・p値メーター */
   .preset-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
   .preset-lead { font-size: 0.85rem; color: var(--muted); }
-  .preset-btn { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 0.86rem; transition: background .12s, border-color .12s; }
-  .preset-btn:hover { background: var(--border); border-color: var(--accent); }
+  .preset-btn { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--text); cursor: pointer; font-size: 0.86rem; transition: background .12s, border-color .12s, box-shadow .12s; }
+  .preset-btn:hover { background: var(--panel-2); border-color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
   .legend-title { color: var(--muted); }
   .legend-item { display: inline-flex; align-items: center; gap: 3px; }
   .legend-sep { display: inline-block; width: 1px; height: 14px; background: var(--border); margin: 0 4px; }
-  .grad-bar { display: inline-block; width: 88px; height: 12px; border-radius: 3px; margin: 0 5px; vertical-align: -2px; border: 1px solid var(--border); background: linear-gradient(90deg, #131720 0%, #33507e 45%, #6ea8fe 100%); }
+  .grad-bar { display: inline-block; width: 88px; height: 12px; border-radius: 3px; margin: 0 5px; vertical-align: -2px; border: 1px solid var(--border); background: linear-gradient(90deg, #dbeafe 0%, #93c5fd 45%, #2563eb 100%); }
   /* p値メーター */
   .stat-card-wide { grid-column: 1 / -1; }
   .pmeter { margin: 8px 0 6px; }
-  .pmeter-track { position: relative; height: 16px; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(90deg, rgba(224,87,76,0.60) 0 5%, rgba(89,212,153,0.24) 5% 100%); }
-  .pmeter-track::before { content: ''; position: absolute; left: 5%; top: -2px; bottom: -2px; width: 2px; background: rgba(255,255,255,0.45); }
-  .pmeter-marker { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 5px rgba(0,0,0,0.7); left: 50%; transition: left .25s ease, background .25s; }
+  .pmeter-track { position: relative; height: 16px; border-radius: 8px; border: 1px solid var(--border); background: linear-gradient(90deg, rgba(239,68,68,0.22) 0 5%, rgba(5,150,105,0.13) 5% 100%); }
+  .pmeter-track::before { content: ''; position: absolute; left: 5%; top: -2px; bottom: -2px; width: 2px; background: rgba(0,0,0,0.20); }
+  .pmeter-marker { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; border-radius: 2px; background: #2563eb; box-shadow: 0 0 5px rgba(37,99,235,0.4); left: 50%; transition: left .25s ease, background .25s; }
   .pmeter-scale { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
-  .pmeter-scale .red { color: #e0796f; }
+  .pmeter-scale .red { color: #ef4444; }
   .pmeter-scale .green { color: var(--ok); }
   /* 操作パネルのカテゴリ分け */
   .ctrl-cats { display: flex; flex-wrap: wrap; gap: 12px; }
   .ctrl-cat { flex: 1 1 250px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px 11px; }
-  .ctrl-cat-world { border-top: 2px solid #6ea8fe; }
-  .ctrl-cat-ai { border-top: 2px solid #e0b84c; }
-  .ctrl-cat-play { border-top: 2px solid #59d499; }
+  .ctrl-cat-world { border-top: 2px solid #2563eb; }
+  .ctrl-cat-ai { border-top: 2px solid #d97706; }
+  .ctrl-cat-play { border-top: 2px solid #059669; }
   .ctrl-cat-title { font-size: 0.79rem; font-weight: bold; color: var(--text); margin-bottom: 9px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
   .ctrl-cat-body { display: flex; flex-wrap: wrap; gap: 9px 14px; align-items: flex-start; }
   .ctrl-cat-body .step-count { margin-left: 0; }
   .ctrl-cat-hint { display: block; margin-top: 10px; font-size: 0.76rem; color: var(--warn); }
   .ctrl-group-wrap { display: flex; flex-direction: column; gap: 3px; }
   .ctrl-hint-text { font-size: 0.72rem; color: var(--muted); line-height: 1.4; max-width: 200px; }
-  .ctrl-hint-text em { color: var(--ok); font-style: normal; font-weight: bold; } /* hint emphasis */
+  .ctrl-hint-text em { color: var(--ok); font-style: normal; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -330,6 +330,28 @@
 <script>
 "use strict";
 (function () {
+  // ===== Light-theme canvas palette =====
+  var C = {
+    tileBg:      '#f0f4ff',
+    tileLine:    '#e0e7ff',
+    tileText:    'rgba(17,24,39,0.88)',
+    tileTextFix: '#92400e',
+    barTrack:    '#e5e7eb',
+    gaugeBg:     'rgba(229,231,235,0.85)',
+    fixBorder:   '#d97706',
+    gridLine:    '#e5e7eb',
+    axisLine:    '#d1d5db',
+    axisLabel:   '#6b7280',
+    refLine:     'rgba(17,24,39,0.30)',
+    refLabel:    'rgba(17,24,39,0.65)',
+    legendText:  '#111827',
+    seriesALine: '#2563eb',
+    seriesABand: 'rgba(37,99,235,0.07)',
+    seriesBLine: '#d97706',
+    seriesBBand: 'rgba(217,119,6,0.10)',
+    emptyText:   '#9ca3af',
+  };
+
   // ===================================================================
   // 迷信の誕生シミュレーション — 単一ファイル実装
   //   ・外部依存なし / ビルド不要 / file:// 直開き対応（module不使用）
@@ -894,8 +916,8 @@
   var gRenderSkip = 2;   // N フレームに1回描画（≈30fps で 60fps rAF）
 
   var ACT_COLORS = [
-    '#6ea8fe','#59d499','#e0b84c','#f28b82','#c58af9',
-    '#80cbc4','#ffb74d','#ce93d8','#90a4ae','#a5d6a7',
+    '#2563eb','#059669','#d97706','#dc2626','#7c3aed',
+    '#0891b2','#ea580c','#9333ea','#475569','#16a34a',
   ];
   // 行動の表示名（初見者向け: 丸数字で統一）
   var ACT_NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
@@ -908,9 +930,9 @@
   // 迷信の強さ（0〜1）→ ゲージ色（弱い黄 → 強い橙）
   function mistColor(c) {
     c = Math.max(0, Math.min(1, c));
-    var hue = (48 - 30 * c).toFixed(0);   // 48(黄) → 18(橙)
-    var light = (72 - 24 * c).toFixed(0); // 72% → 48%
-    return 'hsl(' + hue + ',92%,' + light + '%)';
+    var hue = (48 - 28 * c).toFixed(0);   // 48(黄) → 20(橙)
+    var light = (58 - 22 * c).toFixed(0); // 58% → 36% (白背景で視認できる濃さ)
+    return 'hsl(' + hue + ',90%,' + light + '%)';
   }
 
   // 凡例（HTML）を N に合わせて生成: ①色＝信じている行動 ②明るさ/ゲージ＝迷信の強さ
@@ -952,8 +974,8 @@
     var tw = W / M, mg = 2;
 
     var ROW_META = {
-      A: { label: 'A班：当たりも外れも公平に学ぶ', color: '#6ea8fe', band: 'rgba(110,168,254,0.10)' },
-      B: { label: 'B班：当たりだけ強く覚える（思い込みあり）', color: '#e0b84c', band: 'rgba(224,184,76,0.10)' },
+      A: { label: 'A班：当たりも外れも公平に学ぶ', color: '#2563eb', band: 'rgba(37,99,235,0.06)' },
+      B: { label: 'B班：当たりだけ強く覚える（思い込みあり）', color: '#d97706', band: 'rgba(217,119,6,0.07)' },
     };
 
     ['A', 'B'].forEach(function (kind, row) {
@@ -975,7 +997,7 @@
 
         // 背景: 暗い（過信なし＝真の確率どおり）→ 行動色が鮮やか（過信が強い＝迷信）。
         var bright = 0.18 + 0.82 * ob;
-        ctx.fillStyle = '#0e121b';
+        ctx.fillStyle = C.tileBg;
         ctx.fillRect(x, y, iw, ih);
         ctx.globalAlpha = bright;
         ctx.fillStyle = ACT_COLORS[dom % ACT_COLORS.length];
@@ -990,7 +1012,7 @@
         for (var ai = 0; ai < N; ai++) {
           var bx = x + 2 + ai * bw;
           var by = y + ih - 6;
-          ctx.fillStyle = '#222736';
+          ctx.fillStyle = C.barTrack;
           ctx.fillRect(bx, by, bw - 1, 5);
           var frac = maxV > 0 ? sim.agent.V[ai] / maxV : 0;
           ctx.fillStyle = ACT_COLORS[ai % ACT_COLORS.length];
@@ -998,9 +1020,9 @@
         }
 
         // テキスト（明るいタイルでも読めるよう影付き）
-        ctx.shadowColor = 'rgba(0,0,0,0.75)';
-        ctx.shadowBlur = 3;
-        ctx.fillStyle = 'rgba(245,247,252,0.97)';
+        ctx.shadowColor = 'rgba(0,0,0,0.12)';
+        ctx.shadowBlur = 2;
+        ctx.fillStyle = C.tileText;
         ctx.font = 'bold 11px sans-serif';
         ctx.fillText(kind + (col + 1), x + 4, y + 14);
         ctx.font = '10px sans-serif';
@@ -1009,20 +1031,20 @@
 
         // 過信ゲージ（横バー）: 明るさの意味を明示的な数値バーで二重符号化
         var gx = x + 4, gy = y + 34, gw = iw - 8, gh = 5;
-        ctx.fillStyle = 'rgba(18,22,32,0.85)';
+        ctx.fillStyle = C.gaugeBg;
         ctx.fillRect(gx, gy, gw, gh);
         ctx.fillStyle = mistColor(ob);
         ctx.fillRect(gx, gy, gw * ob, gh);
-        ctx.shadowColor = 'rgba(0,0,0,0.75)';
-        ctx.shadowBlur = 2;
-        ctx.fillStyle = fixated ? 'rgba(255,209,102,0.98)' : 'rgba(224,228,238,0.9)';
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 1;
+        ctx.fillStyle = fixated ? C.tileTextFix : C.tileText;
         ctx.font = (fixated ? 'bold ' : '') + '9px sans-serif';
         ctx.fillText('過信 ' + ob.toFixed(2) + (fixated ? ' 🔒' : ''), gx, gy + 15);
         ctx.shadowBlur = 0;
 
         // 固着した個体は金枠で強調
         if (fixated) {
-          ctx.strokeStyle = 'rgba(255,209,102,0.9)';
+          ctx.strokeStyle = C.fixBorder;
           ctx.lineWidth = 2;
           ctx.strokeRect(x + 1, y + 1, iw - 2, ih - 2);
         }
@@ -1056,7 +1078,7 @@
     ctx.clearRect(0, 0, W, H);
 
     if (gHistA.length < 2) {
-      ctx.fillStyle = '#9aa3b2';
+      ctx.fillStyle = C.emptyText;
       ctx.font = '13px sans-serif';
       ctx.fillText('まもなくグラフが伸びていきます…（動かない場合は ▶ 再生 を押してください）', 24, H / 2 + 5);
       return;
@@ -1073,9 +1095,9 @@
     ctx.lineWidth = 1;
     [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
       var gy = scY(v);
-      ctx.strokeStyle = '#2a2f3d';
+      ctx.strokeStyle = C.gridLine;
       ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + pw, gy); ctx.stroke();
-      ctx.fillStyle = '#9aa3b2'; ctx.font = '10px monospace';
+      ctx.fillStyle = C.axisLabel; ctx.font = '10px monospace';
       ctx.textAlign = 'right';
       ctx.fillText(v.toFixed(2), pad.l - 4, gy + 3);
     });
@@ -1086,18 +1108,18 @@
     if (gPop) {
       var py = scY(gPop.config.p);
       ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = 'rgba(230,234,242,0.55)';
+      ctx.strokeStyle = C.refLine;
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(pad.l + pw, py); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(230,234,242,0.85)'; ctx.font = '10px sans-serif';
+      ctx.fillStyle = C.refLabel; ctx.font = '10px sans-serif';
       ctx.fillText('真の確率 p=' + gPop.config.p.toFixed(2) + '（現実）', pad.l + pw - 150, py - 5);
     }
 
     // 系列
     [
-      { hist: gHistA, band: 'rgba(110,168,254,0.12)', line: '#6ea8fe' },
-      { hist: gHistB, band: 'rgba(224,184,76,0.17)',  line: '#e0b84c' },
+      { hist: gHistA, band: C.seriesABand, line: C.seriesALine },
+      { hist: gHistB, band: C.seriesBBand, line: C.seriesBLine },
     ].forEach(function (s) {
       var h = s.hist;
       if (h.length < 2) return;
@@ -1116,7 +1138,7 @@
     });
 
     // 軸
-    ctx.strokeStyle = '#3a3f50'; ctx.lineWidth = 1;
+    ctx.strokeStyle = C.axisLine; ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ph);
     ctx.lineTo(pad.l + pw, pad.t + ph); ctx.stroke();
@@ -1125,24 +1147,24 @@
     ctx.save();
     ctx.translate(10, pad.t + ph / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
     ctx.textAlign = 'center'; ctx.fillText('「効く」と信じる強さ', 0, 0);
     ctx.restore();
     ctx.textAlign = 'left';
 
     // X 軸 t 表示
-    ctx.fillStyle = '#9aa3b2'; ctx.font = '10px sans-serif';
+    ctx.fillStyle = C.axisLabel; ctx.font = '10px sans-serif';
     ctx.fillText('経過 t=' + gHistA[gHistA.length - 1].t.toLocaleString(), pad.l + pw - 90, H - 4);
 
     // 凡例
     var lx = pad.l + 8, ly = pad.t + 6;
     var lastA = gHistA[gHistA.length - 1], lastB = gHistB[gHistB.length - 1];
     [
-      ['#6ea8fe', 'A班（公平に学ぶ）', lastA ? lastA.mean : 0],
-      ['#e0b84c', 'B班（当たりだけ覚える）', lastB ? lastB.mean : 0],
+      [C.seriesALine, 'A班（公平に学ぶ）', lastA ? lastA.mean : 0],
+      [C.seriesBLine, 'B班（当たりだけ覚える）', lastB ? lastB.mean : 0],
     ].forEach(function (e, i) {
       ctx.fillStyle = e[0]; ctx.fillRect(lx, ly + i * 15, 14, 3);
-      ctx.fillStyle = '#e6e8ee'; ctx.font = '11px sans-serif';
+      ctx.fillStyle = C.legendText; ctx.font = '11px sans-serif';
       ctx.fillText(e[1] + '  ' + e[2].toFixed(3), lx + 18, ly + i * 15 + 8);
     });
   }
@@ -1188,7 +1210,7 @@
           if (mk) { mk.style.left = '50%'; mk.style.background = '#fff'; }
         } else {
           var pos = Math.max(1, Math.min(99, tr.p * 100));
-          if (mk) { mk.style.left = pos + '%'; mk.style.background = tr.p < 0.05 ? '#e0574c' : '#ffffff'; }
+          if (mk) { mk.style.left = pos + '%'; mk.style.background = tr.p < 0.05 ? '#ef4444' : '#2563eb'; }
           pEl.style.color = '';
           pEl.innerHTML = tr.p < 0.05
             ? '<b style="color:var(--warn)">p=' + tr.p.toFixed(3) + '</b> ⚠ 今回はたまたま赤（無関係でも約20回に1回は起こります）'
